@@ -8,6 +8,7 @@ catkin_simple(ALL_DEPS_REQUIRED)
 # PYTHON #
 ##########
 
+catkin_python_setup()
 
 ##########
 # EXPORT #
