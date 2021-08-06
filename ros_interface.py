@@ -46,13 +46,7 @@ class ImageReceiver:
         self.fifo_descriptors = open_fifo(
             '/tmp/maplab_features_descriptors', 'rb')
 
-    def image_callback(self, image_msg):
-        try:
-            cv_image = self.bridge.imgmsg_to_cv2(
-                    image_msg, desired_encoding="passthrough")
-        except CvBridgeError as e:
-            print(e)
-
+    def detect_and_describe(self, cv_image):
         # Transmit image for processing
         cv_success, cv_binary = cv2.imencode('.png', cv_image)
         assert(cv_success)
@@ -77,20 +71,27 @@ class ImageReceiver:
         y = descriptor_data[:, 1]
         scores = descriptor_data[:, 2]
         scales = descriptor_data[:, 3]
-        descriptors = descriptor_data[:, 4:].flatten().view(np.uint8)
+        descriptors = descriptor_data[:, 4:]
 
-        # Prepare Maplab feature message
+        return x, y, scores, scales, descriptors
+
+    def publish_features(self, stamp, x, y, scales, scores, descriptors):
+        num_keypoints = int(descriptors.shape[0])
+
+        # Flatten descriptors and convert to bytes
+        descriptors = descriptors.flatten().view(np.uint8)
+
+        # Fill in basic message data
         feature_msg = Features()
-        feature_msg.header.stamp = image_msg.header.stamp
-        feature_msg.numKeypointMeasurements = int(num_keypoints)
+        feature_msg.header.stamp = stamp
+        feature_msg.numKeypointMeasurements = num_keypoints
         feature_msg.keypointMeasurementsX = x.tolist()
         feature_msg.keypointMeasurementsY = y.tolist()
-        feature_msg.keypointMeasurementUncertainties = scores.tolist()
         feature_msg.keypointScales = scales.tolist()
         feature_msg.keypointScores = scores.tolist()
         feature_msg.descriptors.data = descriptors.tolist()
 
-        # Descriptor array size
+        # Descriptor array dimentions
         dim0 = MultiArrayDimension()
         dim0.label = 'desc_count'
         dim0.size = int(num_keypoints)
@@ -106,13 +107,24 @@ class ImageReceiver:
         feature_msg.descriptors.layout.dim = [dim0, dim1]
         feature_msg.descriptors.layout.data_offset = 0
 
+        # Publish
         self.descriptor_pub.publish(feature_msg)
+
+    def image_callback(self, image_msg):
+        try:
+            cv_image = self.bridge.imgmsg_to_cv2(
+                    image_msg, desired_encoding="passthrough")
+        except CvBridgeError as e:
+            print(e)
+
+        x, y, scores, scales, descriptors = self.detect_and_describe(cv_image)
+        self.publish_features(
+            image_msg.header.stamp, x, y, scores, scales, descriptors)
 
         #for kp in xy:
         #    cv2.circle(cv_image, (int(kp[0]), int(kp[1])), 3, (0, 255, 0), 1)
         #cv2.imshow("Image window2", cv_image)
         #cv2.waitKey(3)
-
 
 def main(args):
     image_receiver = ImageReceiver(
