@@ -19,7 +19,7 @@ class Config ():
         self.gpu = [0]
         self.model_path = os.path.join(module_path, 'models/r2d2_WASF_N16.pt')
 
-        self.num_keypoints = 200
+        self.num_keypoints = 2000
         self.scale_f = 2**0.25
         self.min_scale = 1
         self.max_scale = 1
