@@ -53,7 +53,7 @@ class ImageReceiver:
             criteria = (
                 cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
         self.lk_max_step_px = 1.0
-        self.lk_num_keypoints = 1000
+        self.lk_num_keypoints = 200
         self.lk_redetect_thr = 0.9
         self.lk_merge_tracks_thr_px = 3
         self.lk_mask_redetections_thr_px = 10
@@ -190,11 +190,11 @@ class ImageReceiver:
             self.prev_track_ids = np.concatenate(
                 [self.prev_track_ids, track_ids[keep]])
         else:
-            self.prev_xy = xy
-            self.prev_scores = scores
-            self.prev_scales = scales
-            self.prev_descriptors = descriptors
-            self.prev_track_ids = track_ids
+            self.prev_xy = xy[:self.lk_num_keypoints]
+            self.prev_scores = scores[:self.lk_num_keypoints]
+            self.prev_scales = scales[:self.lk_num_keypoints]
+            self.prev_descriptors = descriptors[:self.lk_num_keypoints]
+            self.prev_track_ids = track_ids[:self.lk_num_keypoints]
 
         for kp in xy:
             cv2.circle(cv_image, (int(kp[0]), int(kp[1])), 3, (0, 255, 0), 1)
