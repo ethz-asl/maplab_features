@@ -10,7 +10,7 @@ def convert_msg_to_array(pcl_msg):
     return np.array(points_list)
 
 # Based on https://github.com/PRBonn/OverlapNet/blob/master/src/utils/utils.py
-def project_cloud_to_2d(cloud, fov_up=3.0, fov_down=-25.0, proj_H=64, proj_W=900, max_range=70):
+def project_cloud_to_2d(cloud, fov_up=3.0, fov_down=-25.0, proj_H=64, proj_W=900, max_range=200):
     fov_up = fov_up / 180.0 * np.pi  # field of view up in radians
     fov_down = fov_down / 180.0 * np.pi  # field of view down in radians
     fov = abs(fov_down) + abs(fov_up)  # get field of view total in radians
@@ -48,32 +48,11 @@ def project_cloud_to_2d(cloud, fov_up=3.0, fov_down=-25.0, proj_H=64, proj_W=900
     proj_y = np.minimum(proj_H - 1, proj_y)
     proj_y = np.maximum(0, proj_y).astype(np.int32)  # in [0,H-1]
 
-    # order in decreasing depth
-    order = np.argsort(depth)[::-1]
-    depth = depth[order]
-    intensity = intensity[order]
-    proj_y = proj_y[order]
-    proj_x = proj_x[order]
-
-    scan_x = scan_x[order]
-    scan_y = scan_y[order]
-    scan_z = scan_z[order]
-
-    indices = np.arange(depth.shape[0])
-    indices = indices[order]
-
     proj_range = np.full((proj_H, proj_W), -1,
                    dtype=np.float32)  # [H,W] range (-1 is no data)
-    proj_vertex = np.full((proj_H, proj_W, 4), -1,
-                    dtype=np.float32)  # [H,W] index (-1 is no data)
-    proj_idx = np.full((proj_H, proj_W), -1,
-                 dtype=np.int32)  # [H,W] index (-1 is no data)
     proj_intensity = np.full((proj_H, proj_W), -1,
                  dtype=np.float32)  # [H,W] index (-1 is no data)
 
     proj_range[proj_y, proj_x] = depth
-    proj_vertex[proj_y, proj_x] = np.array([scan_x, scan_y, scan_z, np.ones(len(scan_x))]).T
-    proj_idx[proj_y, proj_x] = indices
     proj_intensity[proj_y, proj_x] = intensity
-
-    return proj_range, proj_vertex, proj_intensity, proj_idx
+    return proj_range, proj_intensity

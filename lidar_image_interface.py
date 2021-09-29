@@ -34,26 +34,16 @@ class LidarReceiver:
         proj_H = 128
         proj_W = 1024
 
-        proj_range, _, proj_intensity, _ = project_cloud_to_2d(cloud, fov_up, fov_down, proj_H, proj_W)
+        proj_range, proj_intensity = project_cloud_to_2d(cloud, fov_up, fov_down, proj_H, proj_W)
         self.visualize_projection(proj_range, proj_intensity)
 
 
     def visualize_projection(self, range_img, intensity_img):
-        # fig, axs = plt.subplots(2, figsize=(12, 8))
-        # plt.ion()
-        # plt.show(block=False)
-
-        # axs[0].set_title('range')
-        # axs[0].imshow(range_img)
-        # axs[0].set_axis_off()
-
-        # axs[1].set_title('intensity')
-        intensity_img[intensity_img < 0] = 0
-        # axs[1].imshow(intensity_img, cmap='gray')
-        # axs[1].set_axis_off()
-
+        range_img = cv2.cvtColor(range_img.astype(np.uint8), cv2.COLOR_GRAY2BGR)
+        # range_img_c = cv2.applyColorMap(range_img, cv2.COLORMAP_JET)
         cv2.imshow("range", range_img)
         cv2.imshow("intensity", intensity_img)
+        cv2.waitKey(1)
 
 
 if __name__ == '__main__':
