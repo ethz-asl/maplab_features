@@ -67,6 +67,7 @@ class PointCloudUtils:
         intensity[good_points_mask] = self.c * np.log((intensity[good_points_mask] - self.d) * self.config.flatness_intensity)
 
         proj_range[proj_y, proj_x] = range
-        proj_intensity[proj_y, proj_x] = intensity
+        proj_intensity[proj_y, proj_x] = np.clip(intensity, 0, 255)
         inpaint_mask[proj_range <= 0] = 255
-        return proj_range, proj_intensity, inpaint_mask
+
+        return proj_range, proj_intensity.astype(np.uint8), inpaint_mask
