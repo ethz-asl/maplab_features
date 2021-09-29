@@ -17,4 +17,4 @@ projection_height:   64
 projection_width:    1024
 
 # Debugging
-visualize:           True
+visualize:           False

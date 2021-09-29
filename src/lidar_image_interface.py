@@ -2,6 +2,7 @@
 import numpy as np
 
 import cv2
+from cv_bridge import CvBridge
 import rospy
 from sensor_msgs.msg import Image, PointCloud2, PointField
 from maplab_msgs.msg import Features
@@ -28,8 +29,9 @@ class LidarReceiver:
 
         # Subscriber and publisher.
         self.pc_sub = rospy.Subscriber(lidar_topic, PointCloud2, self.pointcloud_callback)
-        self.descriptor_pub = rospy.Publisher(
+        self.feature_image_pub = rospy.Publisher(
                 image_topic, Image, queue_size=20)
+        self.bridge = CvBridge()
         rospy.loginfo('[LidarReceiver] Subscribed to {sub}.'.format(sub=lidar_topic))
         rospy.loginfo('[LidarReceiver] Publishing on {pub}.'.format(pub=image_topic))
 
@@ -41,6 +43,9 @@ class LidarReceiver:
         if self.config.visualize:
             self.visualize_projection(range_img, intensity_img)
             self.visualize_feature_image(feature_img)
+
+        img_msg = self.bridge.cv2_to_imgmsg(feature_img, "mono8")
+        self.feature_image_pub.publish(img_msg)
 
 
     def process_images(self, range_img, intensity_img, inpaint_mask):
@@ -59,8 +64,8 @@ class LidarReceiver:
 
         range_gradient = cv2.addWeighted(range_grad_x, 0.5, range_grad_y, 0.5, 0)
 
-        hdr_image = self.merge_mertens.process([range_gradient, intensity_img]) * 255
-        return hdr_image
+        hdr_image = np.clip(self.merge_mertens.process([range_gradient, intensity_img]) * 255, 0, 255)
+        return hdr_image.astype(np.uint8)
 
 
     def visualize_projection(self, range_img, intensity_img):
