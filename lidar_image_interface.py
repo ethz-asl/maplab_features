@@ -40,6 +40,7 @@ class LidarReceiver:
 
     def visualize_projection(self, range_img, intensity_img):
         range_img = cv2.cvtColor(range_img.astype(np.uint8), cv2.COLOR_GRAY2BGR)
+        intensity_img = cv2.cvtColor(intensity_img.astype(np.uint8), cv2.COLOR_GRAY2BGR)
         # range_img_c = cv2.applyColorMap(range_img, cv2.COLORMAP_JET)
         cv2.imshow("range", range_img)
         cv2.imshow("intensity", intensity_img)
