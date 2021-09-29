@@ -10,6 +10,28 @@ import matplotlib.pyplot as plt
 
 class LidarReceiver:
     def __init__(self, lidar_topic, image_topic):
+
+        # Image processing
+        self.intensity_clahe = cv2.createCLAHE(clipLimit=6.0, tileGridSize=(4, 12))
+        self.horizontal_filter_kernel = np.array([[0, 0, 0.125],
+                                                  [0, 0, 0.25],
+                                                  [0, 0, 0.25],
+                                                  [0, 0, 0.25],
+                                                  [0, 0, 0.125]])
+        self.close_point = 1.0
+        self.far_point = 50.0
+        self.min_intensity = 2
+        self.max_intensity = 3000
+        self.flatness_range = 1
+        self.flatness_intensity = 5
+        self.visualize = False
+
+        # TODO(lbern): Find out what does coefficients do and give them meaningful names.
+        self.a = 255.0 / np.log(1.0 - self.close_point * self.flatness_range + self.far_point * self.flatness_range);
+        self.b = self.close_point - 1.0 / self.flatness_range;
+        self.c = 255.0 / np.log(1.0 - self.min_intensity * self.flatness_intensity + self.max_intensity * self.flatness_intensity);
+        self.d = self.min_intensity - 1.0 / self.flatness_intensity;
+
         # Subscriber and publisher.
         self.pc_sub = rospy.Subscriber(lidar_topic, PointCloud2, self.pointcloud_callback)
         self.descriptor_pub = rospy.Publisher(
@@ -23,19 +45,31 @@ class LidarReceiver:
 
         # TODO(lbern): introduce configs
         # OS-1
-        #fov_up=17.5
-        #fov_down=-15.5
+        # fov_up=17.5
+        # fov_down=-15.5
+        # proj_H = 64
+        # proj_W = 1024
+
+        # OS-0 64
+        fov_up=50.5
+        fov_down=-47.5
         proj_H = 64
         proj_W = 1024
 
-        # OS-0
-        fov_up=50.5
-        fov_down=-47.5
-        proj_H = 128
-        proj_W = 1024
-
         proj_range, proj_intensity = project_cloud_to_2d(cloud, fov_up, fov_down, proj_H, proj_W)
-        self.visualize_projection(proj_range, proj_intensity)
+        if self.visualize:
+            self.visualize_projection(proj_range, proj_intensity)
+
+    def process_images(self, range_img, intensity_img):
+        # Perform a histogram equalization of the intensity channel
+        intensity_img = self.intensity_clahe.apply(intensity_img)
+
+        # Filter horizontal lines.
+        cv2.filter2D(intensity_img, -1, self.horizontal_filter_kernel)
+
+
+        dst = cv2.inpaint(img, mask, 3, cv2.INPAINT_NS)
+
 
 
     def visualize_projection(self, range_img, intensity_img):
