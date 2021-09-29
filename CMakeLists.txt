@@ -5,13 +5,9 @@ find_package(catkin_simple REQUIRED)
 catkin_simple(ALL_DEPS_REQUIRED)
 
 ##########
-# PYTHON #
-##########
-
-catkin_python_setup()
-
-##########
 # EXPORT #
 ##########
-cs_install()
+install(DIRECTORY src config launch
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+)
 cs_export()
