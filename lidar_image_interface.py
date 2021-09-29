@@ -39,18 +39,21 @@ class LidarReceiver:
 
 
     def visualize_projection(self, range_img, intensity_img):
-        fig, axs = plt.subplots(2, figsize=(12, 8))
-        plt.ion()
-        plt.show(block=False)
+        # fig, axs = plt.subplots(2, figsize=(12, 8))
+        # plt.ion()
+        # plt.show(block=False)
 
-        axs[0].set_title('range')
-        axs[0].imshow(range_img)
-        axs[0].set_axis_off()
+        # axs[0].set_title('range')
+        # axs[0].imshow(range_img)
+        # axs[0].set_axis_off()
 
-        axs[1].set_title('intensity')
+        # axs[1].set_title('intensity')
         intensity_img[intensity_img < 0] = 0
-        axs[1].imshow(intensity_img, cmap='gray')
-        axs[1].set_axis_off()
+        # axs[1].imshow(intensity_img, cmap='gray')
+        # axs[1].set_axis_off()
+
+        cv2.imshow("range", range_img)
+        cv2.imshow("intensity", intensity_img)
 
 
 if __name__ == '__main__':
