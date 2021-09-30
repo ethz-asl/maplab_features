@@ -65,6 +65,10 @@ class LidarReceiver:
         range_gradient = cv2.addWeighted(range_grad_x, 0.5, range_grad_y, 0.5, 0)
 
         hdr_image = np.clip(self.merge_mertens.process([range_gradient, intensity_img]) * 255, 0, 255)
+
+        if self.config.resize_output:
+            hdr_image = cv2.resize(hdr_image, (4096, 256), 0, 0, interpolation=cv2.INTER_NEAREST)
+
         return hdr_image.astype(np.uint8)
 
 

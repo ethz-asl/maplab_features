@@ -16,5 +16,6 @@ fov_down:            47.5  # OS-1: -15.5
 projection_height:   64
 projection_width:    1024
 
-# Debugging
+# General Settings
 visualize:           False
+resize_output:       True
