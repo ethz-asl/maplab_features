@@ -51,3 +51,10 @@ class LidarImageConfig(BaseConfig):
         # General settings.
         self.visualize = self.try_get_param("~visualize", self.visualize)
         self.resize_output = self.try_get_param("~resize_output", self.resize_output)
+
+class LkConfig(BaseConfig):
+    def __init__(self):
+        self.feature_detector = 'freak'
+
+    def init_from_config(self):
+        self.feature_detector = self.try_get_param("~detector_type", self.feature_detector)

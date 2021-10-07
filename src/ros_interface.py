@@ -13,6 +13,7 @@ from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 from maplab_msgs.msg import Features
 from std_msgs.msg import MultiArrayDimension
+from config import LkConfig
 
 def open_fifo(file_name, mode):
     try:
@@ -32,6 +33,9 @@ def read_bytes(file, num_bytes):
 
 class ImageReceiver:
     def __init__(self, image_topic, descriptor_topic):
+        self.config = LkConfig()
+        self.config.init_from_config()
+
         # image subscriber
         self.image_sub = rospy.Subscriber(
                 image_topic, Image, self.image_callback, queue_size=20)
@@ -252,15 +256,11 @@ class ImageReceiver:
 
         self.publish_features(image_msg.header.stamp)
 
-def main(args):
-    image_receiver = ImageReceiver(
-            "/VersaVIS/cam0/image_raw", "/VersaVIS/cam0/features")
-    rospy.init_node('maplab_features', anonymous=True)
+if __name__ == '__main__':
+    rospy.init_node('lk_tracker', anonymous=True)
+    receiver = ImageReceiver('/VersaVIS/cam0/image_raw', '/VersaVIS/cam0/features')
 
     try:
         rospy.spin()
     except KeyboardInterrupt:
-        print("Shutting down")
-
-if __name__ == '__main__':
-    main(sys.argv)
+        print("Shutting down LK tracker.")
