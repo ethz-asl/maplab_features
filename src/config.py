@@ -57,6 +57,7 @@ class LkConfig(BaseConfig):
         # Feature detection settings.
         self.feature_detector = 'sift'
         self.feature_descriptor = 'freak'
+        self.debug_feature_extraction = False
 
         # SURF settings.
         self.surf_hessian_threshold = 400
@@ -68,6 +69,7 @@ class LkConfig(BaseConfig):
         # Feature detection settings.
         self.feature_detector = self.try_get_param("~detector_type", self.feature_detector)
         self.feature_descriptor = self.try_get_param("~descriptor_type", self.feature_descriptor)
+        self.debug_feature_extraction = self.try_get_param("~debug_extraction", self.debug_feature_extraction)
 
         # SURF settings.
         self.surf_hessian_threshold = self.try_get_param("~surf_hessian_threshold", self.surf_hessian_threshold)

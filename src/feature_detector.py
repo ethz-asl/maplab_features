@@ -1,6 +1,7 @@
 import rospy
 import cv2
 import matplotlib.pyplot as plt
+import numpy as np
 from config import LkConfig
 
 class FeatureDetector(object):
@@ -48,21 +49,42 @@ class FeatureDetector(object):
 
         keypoints = self.detector.detect(cv_img, None)
         keypoints, descriptors = self.describer.compute(cv_img, keypoints)
-        return keypoints, descriptors
+
+        # Display keypoints on image.
+        if self.config.debug_feature_extraction:
+            img = cv2.drawKeypoints(cv_img, keypoints, None, (255,0,0), 4)
+            plt.imshow(img)
+            plt.show()
+        return self.cv_keypoints_to_features(keypoints, descriptors)
+
+    def cv_keypoints_to_features(self, keypoints, descriptors):
+        n_keypoints = len(keypoints)
+        assert n_keypoints == descriptors.shape[0]
+        features = np.zeros((n_keypoints, 4 + descriptors.shape[1]))
+        for i in range(n_keypoints):
+            features[i, :2] = [keypoints[i].pt[0], keypoints[i].pt[1]] # or 1,0?
+            features[i, 2] = keypoints[i].response
+            features[i, 3] = keypoints[i].octave
+            features[i, 4:] = descriptors[i,:]
+        return features
+
 
 if __name__ == '__main__':
     config = LkConfig()
     config.feature_detector = 'surf'
     config.feature_descriptor = 'surf'
+    config.debug_feature_extraction = True
     config.surf_hessian_threshold = 50000
-    
+
     fd = FeatureDetector(config)
     img = cv2.imread('../share/fly.png',0)
 
     # Extract keypoints and descriptors from the image.
-    keypoints, descriptors = fd.detect_and_describe(img)
+    features = fd.detect_and_describe(img)
 
     # Display keypoints on image.
-    img2 = cv2.drawKeypoints(img, keypoints, None, (255,0,0), 4)
-    plt.imshow(img2)
-    plt.show()
+    # img2 = cv2.drawKeypoints(img, keypoints, None, (255,0,0), 4)
+    # plt.imshow(img2)
+    # plt.show()
+
+    print(features.shape)
