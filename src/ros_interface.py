@@ -14,41 +14,30 @@ from cv_bridge import CvBridge
 from maplab_msgs.msg import Features
 from std_msgs.msg import MultiArrayDimension
 from config import LkConfig
-
-def open_fifo(file_name, mode):
-    try:
-        os.mkfifo(file_name)
-    except OSError as e:
-        if e.errno != errno.EEXIST:
-            raise
-    return open(file_name, mode)
-
-def read_bytes(file, num_bytes):
-    bytes = b''
-    num_read = 0
-    while num_read < num_bytes:
-        bytes += file.read(num_bytes - num_read)
-        num_read = len(bytes)
-    return bytes
+from feature_extraction import FeatureExtractionCv, FeatureExtractionExternal
 
 class ImageReceiver:
-    def __init__(self, image_topic, descriptor_topic):
+    def __init__(self):
         self.config = LkConfig()
         self.config.init_from_config()
 
-        # image subscriber
+        # Image subscriber
         self.image_sub = rospy.Subscriber(
-                image_topic, Image, self.image_callback, queue_size=20)
+                self.config.input_topic, Image, self.image_callback, queue_size=20)
         self.descriptor_pub = rospy.Publisher(
-                descriptor_topic, Features, queue_size=20)
+                self.config.output_topic, Features, queue_size=20)
+        rospy.loginfo('[ImageReceiver] Subscribed to {in_topic} and publishing to {out_topic}'.format(in_topic=self.config.input_topic, out_topic=self.config.output_topic))
 
         # CV bridge for conversion
         self.bridge = CvBridge()
 
-        # Pipe for transferring images
-        self.fifo_images = open_fifo('/tmp/maplab_features_images', 'wb')
-        self.fifo_descriptors = open_fifo(
-            '/tmp/maplab_features_descriptors', 'rb')
+        # Feature detection and description
+        if self.config.feature_extraction == 'cv':
+            self.feature_extraction = FeatureExtractionCv(self.config)
+        elif self.config.feature_extraction == 'external':
+            self.feature_extraction = FeatureExtractionExternal(self.config)
+        else:
+            ValueError('Invalid feature extraction type: {feature}'.format(feature=self.config.feature_extraction))
 
         # LK tracker settings
         self.lk_params = dict(
@@ -72,7 +61,11 @@ class ImageReceiver:
         self.next_track_id = 0
 
     def lk_track(self, frame_color):
-        frame_gray = cv2.cvtColor(frame_color, cv2.COLOR_BGR2GRAY)
+        if frame_color.ndim == 3 and frame_color.shape[2] == 3:
+            frame_gray = cv2.cvtColor(frame_color, cv2.COLOR_BGR2GRAY)
+        else:
+            frame_gray = frame_color
+            frame_color = cv2.cvtColor(frame_color, cv2.COLOR_GRAY2BGR)
 
         # Check if there is anything to track
         if len(self.prev_xy) > 0:
@@ -127,35 +120,16 @@ class ImageReceiver:
 
         # Save current frame for next time
         self.prev_frame_gray = frame_gray
+        return frame_color
 
     def detect_and_describe(self, cv_image):
-        # Transmit image for processing
-        cv_success, cv_binary = cv2.imencode('.png', cv_image)
-        assert(cv_success)
-        cv_binary = cv_binary.tobytes()
-        num_bytes = np.array([len(cv_binary)], dtype=np.uint32).tobytes()
-        self.fifo_images.write(num_bytes)
-        self.fifo_images.write(cv_binary)
-        self.fifo_images.flush()
-
-        # Receive number of descriptors and size
-        descriptor_header = read_bytes(self.fifo_descriptors, 3*4)
-        num_bytes, num_keypoints, descriptor_size = np.frombuffer(
-            descriptor_header, dtype=np.uint32)
-        if num_keypoints == 0:
-            return
-        descriptor_data = read_bytes(self.fifo_descriptors, num_bytes)
-        descriptor_data = np.frombuffer(descriptor_data, dtype=np.float32)
-
-        # descriptor_data: x, y, desc, score, scale
-        num_cols = descriptor_size + 4
-        assert(descriptor_data.size == num_keypoints * num_cols)
-        descriptor_data = np.reshape(descriptor_data, (num_keypoints, num_cols))
-
+        # Get keypoints and descriptors.
+        descriptor_data = self.feature_extraction.detect_and_describe(cv_image)
         xy = descriptor_data[:, :2]
         scores = descriptor_data[:, 2]
         scales = descriptor_data[:, 3]
         descriptors = descriptor_data[:, 4:]
+        num_keypoints = descriptor_data.shape[0]
 
         # Assign new track ids
         track_ids = np.arange(
@@ -249,7 +223,7 @@ class ImageReceiver:
         except CvBridgeError as e:
             print(e)
 
-        self.lk_track(cv_image)
+        cv_image = self.lk_track(cv_image)
 
         if len(self.prev_xy) < self.lk_num_keypoints * self.lk_redetect_thr:
             self.detect_and_describe(cv_image)
@@ -258,7 +232,7 @@ class ImageReceiver:
 
 if __name__ == '__main__':
     rospy.init_node('lk_tracker', anonymous=True)
-    receiver = ImageReceiver('/VersaVIS/cam0/image_raw', '/VersaVIS/cam0/features')
+    receiver = ImageReceiver()
 
     try:
         rospy.spin()
