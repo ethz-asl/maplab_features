@@ -54,9 +54,22 @@ class LidarImageConfig(BaseConfig):
 
 class LkConfig(BaseConfig):
     def __init__(self):
+        # Feature detection settings.
         self.feature_detector = 'sift'
         self.feature_descriptor = 'freak'
 
+        # SURF settings.
+        self.surf_hessian_threshold = 400
+        self.surf_n_octaves = 4
+        self.surf_n_octaves_layers = 3
+
+
     def init_from_config(self):
+        # Feature detection settings.
         self.feature_detector = self.try_get_param("~detector_type", self.feature_detector)
         self.feature_descriptor = self.try_get_param("~descriptor_type", self.feature_descriptor)
+
+        # SURF settings.
+        self.surf_hessian_threshold = self.try_get_param("~surf_hessian_threshold", self.surf_hessian_threshold)
+        self.surf_n_octaves = self.try_get_param("~surf_n_octaves", self.surf_n_octaves)
+        self.surf_n_octaves_layers = self.try_get_param("~surf_n_octaves_layers", self.surf_n_octaves_layers)

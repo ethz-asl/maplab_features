@@ -6,19 +6,25 @@ from config import LkConfig
 class FeatureDetector(object):
     def __init__(self, config):
         self.config = config
-        self.detector = self.init_feature_detector(config.feature_detector)
-        self.describer = self.init_feature_describer(config.feature_descriptor)
+        self.detector = self.init_feature_detector(config)
+        self.describer = self.init_feature_describer(config)
 
-    def init_feature_detector(self, type):
+    def init_feature_detector(self, config):
+        type = config.feature_detector
         if type == 'sift':
             return cv2.xfeatures2d.SIFT_create()
         if type == 'surf':
-            return cv2.xfeatures2d.SURF_create()
+            surf = cv2.xfeatures2d.SURF_create()
+            surf.setHessianThreshold(config.surf_hessian_threshold)
+            surf.setNOctaves(config.surf_n_octaves)
+            surf.setNOctaveLayers(config.surf_n_octaves_layers)
+            return surf
         else:
             rospy.logerr('[FeatureDetector] Unknown feature type: {type_name}'.format(type_name=type))
             return None
 
-    def init_feature_describer(self, type):
+    def init_feature_describer(self, config):
+        type = config.feature_descriptor
         if type == 'freak':
             return cv2.xfeatures2d.FREAK_create()
         elif type == 'brief':
@@ -26,7 +32,11 @@ class FeatureDetector(object):
         elif type == 'sift':
             return cv2.xfeatures2d.SIFT_create()
         elif type == 'surf':
-            return cv2.xfeatures2d.SURF_create()
+            surf = cv2.xfeatures2d.SURF_create()
+            surf.setHessianThreshold(config.surf_hessian_threshold)
+            surf.setNOctaves(config.surf_n_octaves)
+            surf.setNOctaveLayers(config.surf_n_octaves_layers)
+            return surf
         else:
             rospy.logerr('[FeatureDetector] Unknown feature type: {type_name}'.format(type_name=type))
             return None
@@ -44,6 +54,8 @@ if __name__ == '__main__':
     config = LkConfig()
     config.feature_detector = 'surf'
     config.feature_descriptor = 'surf'
+    config.surf_hessian_threshold = 50000
+    
     fd = FeatureDetector(config)
     img = cv2.imread('../share/fly.png',0)
 
