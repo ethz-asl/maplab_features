@@ -10,8 +10,8 @@ class FeatureExtractionExternal(object):
     def __init__(self, config):
         self.config = config
         # Pipe for transferring images
-        self.fifo_images = open_fifo('/tmp/maplab_features_images', 'wb')
-        self.fifo_descriptors = open_fifo('/tmp/maplab_features_descriptors', 'rb')
+        self.fifo_images = self.open_fifo('/tmp/maplab_features_images', 'wb')
+        self.fifo_descriptors = self.open_fifo('/tmp/maplab_features_descriptors', 'rb')
 
     def open_fifo(self, file_name, mode):
         try:
@@ -31,7 +31,7 @@ class FeatureExtractionExternal(object):
 
     def detect_and_describe(self, cv_img):
         # Transmit image for processing
-        cv_success, cv_binary = cv2.imencode('.png', cv_image)
+        cv_success, cv_binary = cv2.imencode('.png', cv_img)
         assert(cv_success)
         cv_binary = cv_binary.tobytes()
         num_bytes = np.array([len(cv_binary)], dtype=np.uint32).tobytes()
@@ -40,19 +40,18 @@ class FeatureExtractionExternal(object):
         self.fifo_images.flush()
 
         # Receive number of descriptors and size
-        descriptor_header = read_bytes(self.fifo_descriptors, 3*4)
+        descriptor_header = self.read_bytes(self.fifo_descriptors, 3*4)
         num_bytes, num_keypoints, descriptor_size = np.frombuffer(
             descriptor_header, dtype=np.uint32)
         if num_keypoints == 0:
             return
-        descriptor_data = read_bytes(self.fifo_descriptors, num_bytes)
+        descriptor_data = self.read_bytes(self.fifo_descriptors, num_bytes)
         descriptor_data = np.frombuffer(descriptor_data, dtype=np.float32)
 
         # descriptor_data: x, y, desc, score, scale
         num_cols = descriptor_size + 4
         assert(descriptor_data.size == num_keypoints * num_cols)
         return np.reshape(descriptor_data, (num_keypoints, num_cols))
-
 
 class FeatureExtractionCv(object):
     def __init__(self, config):
@@ -95,7 +94,7 @@ class FeatureExtractionCv(object):
     def detect_and_describe(self, cv_img):
         if self.detector is None or self.describer is None:
             rospy.logerr('[FeatureDetector] Cannot detect features. Initializing failed mostly likely due to a bad configuration.')
-            return np.array([]), np.array([])
+            return np.array([])
 
         keypoints = self.detector.detect(cv_img, None)
         keypoints, descriptors = self.describer.compute(cv_img, keypoints)
