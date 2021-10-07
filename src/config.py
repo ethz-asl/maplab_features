@@ -54,7 +54,9 @@ class LidarImageConfig(BaseConfig):
 
 class LkConfig(BaseConfig):
     def __init__(self):
-        self.feature_detector = 'freak'
+        self.feature_detector = 'sift'
+        self.feature_descriptor = 'freak'
 
     def init_from_config(self):
         self.feature_detector = self.try_get_param("~detector_type", self.feature_detector)
+        self.feature_descriptor = self.try_get_param("~descriptor_type", self.feature_descriptor)
