@@ -7,11 +7,10 @@ class PointCloudUtils:
     def __init__(self, config):
         self.config = config
 
-        # TODO(lbern): Find out what does coefficients do and give them meaningful names.
-        self.a = 255.0 / np.log(1.0 - self.config.close_point * self.config.flatness_range + self.config.far_point * self.config.flatness_range);
-        self.b = self.config.close_point - 1.0 / self.config.flatness_range;
-        self.c = 255.0 / np.log(1.0 - self.config.min_intensity * self.config.flatness_intensity + self.config.max_intensity * self.config.flatness_intensity);
-        self.d = self.config.min_intensity - 1.0 / self.config.flatness_intensity;
+        self.range_log_base = 255.0 / np.log(1.0 - self.config.close_point * self.config.flatness_range + self.config.far_point * self.config.flatness_range);
+        self.range_lower_end = self.config.close_point - 1.0 / self.config.flatness_range;
+        self.intensity_log_base = 255.0 / np.log(1.0 - self.config.min_intensity * self.config.flatness_intensity + self.config.max_intensity * self.config.flatness_intensity);
+        self.intensity_lower_end = self.config.min_intensity - 1.0 / self.config.flatness_intensity;
 
     def convert_msg_to_array(self, pcl_msg):
         points_list = []
@@ -60,11 +59,11 @@ class PointCloudUtils:
         bad_points_mask = range < self.config.close_point
         good_points_mask = range > self.config.close_point
         range[bad_points_mask] = 0.0
-        range[good_points_mask] = self.a * np.log((range[good_points_mask] - self.b) * self.config.flatness_range)
+        range[good_points_mask] = self.range_log_base * np.log((range[good_points_mask] - self.range_lower_end) * self.config.flatness_range)
 
         good_points_mask = intensity > self.config.min_intensity
         intensity[intensity < self.config.close_point] = 0.0
-        intensity[good_points_mask] = self.c * np.log((intensity[good_points_mask] - self.d) * self.config.flatness_intensity)
+        intensity[good_points_mask] = self.intensity_log_base * np.log((intensity[good_points_mask] - self.intensity_lower_end) * self.config.flatness_intensity)
 
         proj_range[proj_y, proj_x] = range
         proj_intensity[proj_y, proj_x] = np.clip(intensity, 0, 255)

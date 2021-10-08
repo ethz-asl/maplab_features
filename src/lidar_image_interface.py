@@ -13,7 +13,7 @@ from config import LidarImageConfig
 from point_cloud_utils import PointCloudUtils
 
 class LidarReceiver:
-    def __init__(self, lidar_topic, image_topic):
+    def __init__(self):
         self.config = LidarImageConfig()
         self.config.init_from_config()
         self.utils = PointCloudUtils(self.config)
@@ -28,12 +28,12 @@ class LidarReceiver:
         self.merge_mertens = cv2.createMergeMertens()
 
         # Subscriber and publisher.
-        self.pc_sub = rospy.Subscriber(lidar_topic, PointCloud2, self.pointcloud_callback)
+        self.pc_sub = rospy.Subscriber(self.config.in_pointcloud_topic, PointCloud2, self.pointcloud_callback)
         self.feature_image_pub = rospy.Publisher(
-                image_topic, Image, queue_size=20)
+                self.config.out_image_topic, Image, queue_size=20)
         self.bridge = CvBridge()
-        rospy.loginfo('[LidarReceiver] Subscribed to {sub}.'.format(sub=lidar_topic))
-        rospy.loginfo('[LidarReceiver] Publishing on {pub}.'.format(pub=image_topic))
+        rospy.loginfo('[LidarReceiver] Subscribed to {sub}.'.format(sub=self.config.in_pointcloud_topic))
+        rospy.loginfo('[LidarReceiver] Publishing on {pub}.'.format(pub=self.config.out_image_topic))
 
     def pointcloud_callback(self, msg):
         cloud = self.utils.convert_msg_to_array(msg)
@@ -88,7 +88,7 @@ class LidarReceiver:
 
 if __name__ == '__main__':
     rospy.init_node('lidar_image_converter', anonymous=True)
-    receiver = LidarReceiver('/os_cloud_node/points', '/os_cloud_node/images')
+    receiver = LidarReceiver()
 
     try:
         rospy.spin()
