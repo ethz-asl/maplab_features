@@ -1,0 +1,21 @@
+# Image Processing
+close_point:         1.0
+far_point:           50.0
+min_intensity:       2
+max_intensity:       3000
+flatness_range:      1.0
+flatness_intensity:  5.0
+
+# Input / Output
+in_pointcloud_topic: /os_cloud_node/points
+out_image_topic:     /os_cloud_node/images
+
+# LiDAR Settings
+fov_up:              50.5  # OS-1: 17.5
+fov_down:            47.5  # OS-1: -15.5
+projection_height:   64
+projection_width:    1024
+
+# General Settings
+visualize:           False
+resize_output:       True
