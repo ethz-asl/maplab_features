@@ -38,7 +38,7 @@ class LidarImageConfig(BaseConfig):
         self.flatness_range = self.try_get_param("~flatness_range", self.flatness_range)
         self.flatness_intensity = self.try_get_param("~flatness_intensity", self.flatness_intensity)
 
-        # input and output.
+        # Input and output.
         self.in_pointcloud_topic = self.try_get_param("~in_pointcloud_topic", self.in_pointcloud_topic)
         self.out_image_topic = self.try_get_param("~out_image_topic", self.out_image_topic)
 
@@ -51,3 +51,40 @@ class LidarImageConfig(BaseConfig):
         # General settings.
         self.visualize = self.try_get_param("~visualize", self.visualize)
         self.resize_output = self.try_get_param("~resize_output", self.resize_output)
+
+class LkConfig(BaseConfig):
+    def __init__(self):
+        # General settings.
+        self.input_topic = '/VersaVIS/cam0/image_raw'
+        self.output_topic = '/VersaVIS/cam0/features'
+
+        # Feature extraction settings.
+        self.feature_extraction = 'cv'
+        self.debug_feature_extraction = False
+
+        # OpenCV settings.
+        self.cv_feature_detector = 'sift'
+        self.cv_feature_descriptor = 'freak'
+
+        # SURF settings.
+        self.surf_hessian_threshold = 400
+        self.surf_n_octaves = 4
+        self.surf_n_octaves_layers = 3
+
+    def init_from_config(self):
+        # General settings.
+        self.input_topic = self.try_get_param("~input_topic", self.input_topic)
+        self.output_topic = self.try_get_param("~output_topic", self.output_topic)
+
+        # Feature extraction settings.
+        self.feature_extraction = self.try_get_param("~feature_extraction", self.feature_extraction)
+        self.debug_feature_extraction = self.try_get_param("~debug_extraction", self.debug_feature_extraction)
+
+        # OpenCV settings.
+        self.cv_feature_detector = self.try_get_param("~cv_detector_type", self.cv_feature_detector)
+        self.cv_feature_descriptor = self.try_get_param("~cv_descriptor_type", self.cv_feature_descriptor)
+
+        # SURF settings.
+        self.surf_hessian_threshold = self.try_get_param("~surf_hessian_threshold", self.surf_hessian_threshold)
+        self.surf_n_octaves = self.try_get_param("~surf_n_octaves", self.surf_n_octaves)
+        self.surf_n_octaves_layers = self.try_get_param("~surf_n_octaves_layers", self.surf_n_octaves_layers)

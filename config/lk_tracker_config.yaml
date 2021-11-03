@@ -1,0 +1,18 @@
+# General settings.
+input_topic:            '/alphasense_driver_ros/cam0'
+output_topic:           '/maplab_features'
+
+# Feature extraction settings.
+feature_extraction:     'cv' # cv or external
+debug_extraction:       False
+
+# --- OPENCV-based settings ------------------------------------
+# Extraction settings if opencv is used.
+cv_detector_type:       'surf' # SURF, SIFT
+cv_descriptor_type:     'freak' # SURF, SIFT, FREAK, BRIEF
+
+
+# SURF settings.
+surf_hessian_threshold: 300 # default: 100
+surf_n_octaves: 4             # default: 4
+surf_n_octaves_layers: 3      # default: 3
