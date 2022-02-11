@@ -6,6 +6,7 @@ import errno
 import sys
 import cv2
 import numpy as np
+from scipy import spatial
 
 import rospy
 import rosbag
@@ -26,7 +27,10 @@ class ImageReceiver:
                 self.config.input_topic, Image, self.image_callback, queue_size=20)
         self.descriptor_pub = rospy.Publisher(
                 self.config.output_topic, Features, queue_size=20)
-        rospy.loginfo('[ImageReceiver] Subscribed to {in_topic} and publishing to {out_topic}'.format(in_topic=self.config.input_topic, out_topic=self.config.output_topic))
+        rospy.loginfo('[ImageReceiver] Subscribed to {in_topic} and ' +
+            'publishing to {out_topic}'.format(
+                in_topic=self.config.input_topic,
+                out_topic=self.config.output_topic))
 
         # CV bridge for conversion
         self.bridge = CvBridge()
@@ -37,7 +41,8 @@ class ImageReceiver:
         elif self.config.feature_extraction == 'external':
             self.feature_extraction = FeatureExtractionExternal(self.config)
         else:
-            ValueError('Invalid feature extraction type: {feature}'.format(feature=self.config.feature_extraction))
+            ValueError('Invalid feature extraction type: {feature}'.format(
+                feature=self.config.feature_extraction))
 
         # LK tracker settings
         self.lk_params = dict(
@@ -46,10 +51,11 @@ class ImageReceiver:
             criteria = (
                 cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
         self.lk_max_step_px = 1.0
-        self.lk_num_keypoints = 200
+        self.lk_num_keypoints = 600
         self.lk_redetect_thr = 0.9
         self.lk_merge_tracks_thr_px = 3
         self.lk_mask_redetections_thr_px = 10
+        self.descriptor_reassociation_thr = 10
 
         # Data on the last processed frame
         self.prev_xy = []
@@ -131,13 +137,22 @@ class ImageReceiver:
         descriptors = descriptor_data[:, 4:]
         num_keypoints = descriptor_data.shape[0]
 
-        # Assign new track ids
-        track_ids = np.arange(
-            self.next_track_id,
-            self.next_track_id + num_keypoints).astype(np.int32)
-        self.next_track_id += num_keypoints
-
         if len(self.prev_xy) > 0:
+            # Find new descriptors for the keypoints
+            kdt = spatial.cKDTree(xy)
+            dists, idxs = kdt.query(self.prev_xy)
+
+            keep = dists < self.descriptor_reassociation_thr
+            for i in range(keep.size):
+                if keep[i]:
+                    self.prev_descriptors[i] = descriptors[idxs[i]]
+
+            self.prev_xy = self.prev_xy[keep]
+            self.prev_scores = self.prev_scores[keep]
+            self.prev_scales = self.prev_scales[keep]
+            self.prev_descriptors = self.prev_descriptors[keep]
+            self.prev_track_ids = self.prev_track_ids[keep]
+
             # Limit number of new detections added to fit with the global limit,
             # and mask detections to not initialize keypoints that are too close
             # to previous ones or to new ones
@@ -160,14 +175,26 @@ class ImageReceiver:
             if keep.size == 0:
                 return
 
+            # Assign new track ids
+            track_ids = np.arange(
+                self.next_track_id,
+                self.next_track_id + keep.size).astype(np.int32)
+            self.next_track_id += keep.size
+
             self.prev_xy = np.concatenate([self.prev_xy, xy[keep]])
             self.prev_scores = np.concatenate([self.prev_scores, scores[keep]])
             self.prev_scales = np.concatenate([self.prev_scales, scales[keep]])
             self.prev_descriptors = np.concatenate(
                 [self.prev_descriptors, descriptors[keep]])
             self.prev_track_ids = np.concatenate(
-                [self.prev_track_ids, track_ids[keep]])
+                [self.prev_track_ids, track_ids])
         else:
+            # Assign new track ids
+            track_ids = np.arange(
+                self.next_track_id,
+                self.next_track_id + self.lk_num_keypoints).astype(np.int32)
+            self.next_track_id += self.lk_num_keypoints
+
             self.prev_xy = xy[:self.lk_num_keypoints]
             self.prev_scores = scores[:self.lk_num_keypoints]
             self.prev_scales = scales[:self.lk_num_keypoints]
@@ -224,9 +251,7 @@ class ImageReceiver:
             print(e)
 
         cv_image = self.lk_track(cv_image)
-
-        if len(self.prev_xy) < self.lk_num_keypoints * self.lk_redetect_thr:
-            self.detect_and_describe(cv_image)
+        self.detect_and_describe(cv_image)
 
         self.publish_features(image_msg.header.stamp)
 

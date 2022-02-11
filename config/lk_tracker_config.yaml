@@ -1,9 +1,9 @@
 # General settings.
-input_topic:            '/alphasense_driver_ros/cam0'
+input_topic:            '/VersaVIS/cam1/image_raw'
 output_topic:           '/maplab_features'
 
 # Feature extraction settings.
-feature_extraction:     'cv' # cv or external
+feature_extraction:     'external' # cv or external
 debug_extraction:       False
 
 # --- OPENCV-based settings ------------------------------------
