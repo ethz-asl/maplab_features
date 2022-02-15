@@ -23,8 +23,6 @@ class Config ():
         self.scale_f = 2**0.25
         self.min_scale = 1
         self.max_scale = 1
-        self.min_size = 256
-        self.max_size = 1024
 
         self.reliability_thr = 0.7
         self.repeatability_thr = 0.7
@@ -63,7 +61,6 @@ class NonMaxSuppression (torch.nn.Module):
 
 def extract_multiscale( net, img, detector, scale_f=2**0.25,
                         min_scale=0.0, max_scale=1,
-                        min_size=256, max_size=1024,
                         verbose=False):
     old_bm = torch.backends.cudnn.benchmark
     torch.backends.cudnn.benchmark = False # speedup
@@ -76,8 +73,8 @@ def extract_multiscale( net, img, detector, scale_f=2**0.25,
     s = 1.0 # current scale factor
 
     X,Y,S,C,Q,D = [],[],[],[],[],[]
-    while  s+0.001 >= max(min_scale, min_size / max(H,W)):
-        if s-0.001 <= min(max_scale, max_size / max(H,W)):
+    while  s+0.001 >= min_scale:
+        if s-0.001 <= max_scale:
             nh, nw = img.shape[2:]
             if verbose: print(f"extracting at scale x{s:.02f} = {nw:4d}x{nh:3d}")
             # extract descriptors
@@ -175,9 +172,7 @@ class ImageReceiver:
             self.net, image, self.detector,
             scale_f   = self.config.scale_f,
             min_scale = self.config.min_scale,
-            max_scale = self.config.max_scale,
-            min_size  = self.config.min_size,
-            max_size  = self.config.max_size)
+            max_scale = self.config.max_scale)
 
         xys = xys.cpu().numpy()
         descriptors = descriptors.cpu().numpy()
