@@ -57,10 +57,10 @@ class ImageReceiver:
         self.descriptor_reassociation_thr = 3
 
         self.resize_input_image = 1024
-        self.flip_image = True
+        self.flip_image_for_detection = False
         self.min_distance_to_image_border = 60
 
-        self.debug = True
+        self.debug = False
         self.count_recv = 0
 
         # Data on the last processed frame
@@ -139,12 +139,20 @@ class ImageReceiver:
         self.prev_frame_gray = frame_gray
 
     def detect_and_describe(self, cv_image):
+        # Potentially flip image before detection
+        if self.flip_image_for_detection:
+            cv_image = np.flip(cv_image)
+
         # Get keypoints and descriptors.
         descriptor_data = self.feature_extraction.detect_and_describe(cv_image)
         xy = descriptor_data[:, :2]
         scores = descriptor_data[:, 2]
         scales = descriptor_data[:, 3]
         descriptors = descriptor_data[:, 4:]
+
+        # If the images was flipped we need to flip the keypoint positions
+        if self.flip_image_for_detection:
+            xy = cv_image.shape[:2][::-1] - xy
 
         # Do not detect next to the image border
         img_h, img_w = cv_image.shape[:2]
@@ -222,9 +230,14 @@ class ImageReceiver:
             self.prev_track_ids = track_ids[:num_new_keypoints].copy()
 
         if self.debug:
+            if self.flip_image_for_detection:
+                vis = np.flip(cv_image).copy()
+            else:
+                vis = cv_image.copy()
+
             for kp in xy:
-                cv2.circle(cv_image, (int(kp[0]), int(kp[1])), 3, (0, 255, 0), 1)
-            cv2.imshow("Detections", cv_image)
+                cv2.circle(vis, (int(kp[0]), int(kp[1])), 3, (0, 255, 0), 1)
+            cv2.imshow("Detections", vis)
             cv2.waitKey(3)
 
     def publish_features(self, stamp):
