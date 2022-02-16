@@ -17,7 +17,7 @@ from nets.patchnet import *
 class Config ():
     def __init__(self):
         self.gpu = [0]
-        self.model_path = os.path.join(module_path, 'models/r2d2_WASF_N16.pt')
+        self.model_path = os.path.join(module_path, 'models/r2d2_WASF_N16_grey.pt')
 
         self.num_keypoints = 2000
         self.scale_f = 2**0.25
