@@ -177,6 +177,9 @@ class ImageReceiver:
             replace = dists < self.descriptor_reassociation_thr
             for i in range(replace.size):
                 if replace[i]:
+                    self.prev_xy[i] = xy[idxs[i]]
+                    self.prev_scales[i] = scales[idxs[i]]
+                    self.prev_scores[i] = scores[idxs[i]]
                     self.prev_descriptors[i] = descriptors[idxs[i]]
 
             # Limit number of new detections added to fit with the global limit,
