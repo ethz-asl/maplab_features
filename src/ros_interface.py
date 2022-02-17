@@ -44,21 +44,33 @@ class ImageReceiver:
             ValueError('Invalid feature extraction type: {feature}'.format(
                 feature=self.config.feature_extraction))
 
-        # LK tracker settings
-        self.lk_params = dict(
-            winSize  = (15, 15),
-            maxLevel = 2,
-            criteria = (
-                cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 20, 0.01))
-        self.lk_max_step_px = 2.0
-        self.lk_num_keypoints = 600
-        self.lk_merge_tracks_thr_px = 3
-        self.lk_mask_redetections_thr_px = 7
-        self.descriptor_reassociation_thr = 3
+        self.tracker = 'superglue'
 
-        self.resize_input_image = 1024
+        if self.tracker == 'lk':
+            # LK tracker settings
+            self.lk_params = dict(
+                winSize  = (15, 15),
+                maxLevel = 2,
+                criteria = (
+                    cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 20, 0.01))
+            self.lk_max_step_px = 2.0
+            self.lk_merge_tracks_thr_px = 3
+            self.lk_descriptor_reassociation_thr = 3
+        elif self.tracker == 'superglue':
+            # Pipe for transferring images
+            self.fifo_images = self.open_fifo(
+                '/tmp/maplab_superglue_images', 'wb')
+            self.fifo_matches = self.open_fifo(
+                '/tmp/maplab_superglue_matches', 'rb')
+        else:
+            ValueError('Invalid feature tracking method: {tracker}'.format(
+                tracker=self.tracker))
+
+        self.num_keypoints = 600
+        self.resize_input_image = 640
         self.flip_image_for_detection = False
-        self.min_distance_to_image_border = 60
+        self.min_distance_to_image_border = 30
+        self.mask_redetections_thr_px = 7
 
         self.debug = False
         self.count_recv = 0
@@ -69,19 +81,48 @@ class ImageReceiver:
         self.prev_scores = []
         self.prev_descriptors = []
         self.prev_track_ids = []
-        self.prev_frame_gray = []
+        self.prev_frame = []
 
         self.next_track_id = 0
 
+    def open_fifo(self, file_name, mode):
+        try:
+            os.mkfifo(file_name)
+        except OSError as e:
+            if e.errno != errno.EEXIST:
+                raise
+        return open(file_name, mode)
+
+    def read_bytes(self, file, num_bytes):
+        bytes = b''
+        num_read = 0
+        while num_read < num_bytes:
+            bytes += file.read(num_bytes - num_read)
+            num_read = len(bytes)
+        return bytes
+
+    def send_np(self, file, arr):
+        bytes = arr.tobytes()
+        num_bytes = np.array([len(bytes)], dtype=np.uint32).tobytes()
+        file.write(num_bytes)
+        file.write(bytes)
+        file.flush()
+
+    def read_np(self, file, dtype):
+        num_bytes = self.read_bytes(file, 4)
+        num_bytes = np.frombuffer(num_bytes, dtype=np.uint32)[0]
+        bytes = self.read_bytes(file, num_bytes)
+        return np.frombuffer(bytes, dtype=dtype)
+
     def lk_track(self, frame_gray):
         # Check if there is anything to track
-        if len(self.prev_xy) > 0 and len(self.prev_frame_gray) > 0:
+        if len(self.prev_xy) > 0 and len(self.prev_frame) > 0:
             # Use optical from to determine keypoint movement
             p0 = self.prev_xy.reshape(-1, 1, 2).astype(np.float32)
             p1, _, _ = cv2.calcOpticalFlowPyrLK(
-                self.prev_frame_gray, frame_gray, p0, None, **self.lk_params)
+                self.prev_frame, frame_gray, p0, None, **self.lk_params)
             p0r, _, _ = cv2.calcOpticalFlowPyrLK(
-                frame_gray, self.prev_frame_gray, p1, None, **self.lk_params)
+                frame_gray, self.prev_frame, p1, None, **self.lk_params)
 
             # Determine quality based on:
             #   1) distance between the optical flow predictions
@@ -136,7 +177,50 @@ class ImageReceiver:
                 self.prev_track_ids = []
 
         # Save current frame for next time
-        self.prev_frame_gray = frame_gray
+        self.prev_frame = frame_gray
+
+    def superglue_track(self, frame_gray):
+        # Check if there is anything to track
+        if len(self.prev_xy) > 0 and len(self.prev_frame) > 0:
+            # Transmit images for processing
+            cv_success0, cv_binary0 = cv2.imencode('.png', self.prev_frame)
+            cv_success1, cv_binary1 = cv2.imencode('.png', frame_gray)
+            assert(cv_success0 and cv_success1)
+            self.send_np(self.fifo_images, cv_binary0)
+            self.send_np(self.fifo_images, cv_binary1)
+
+            self.send_np(self.fifo_images, self.prev_xy)
+            self.send_np(self.fifo_images, self.prev_scores)
+            self.send_np(self.fifo_images, self.prev_descriptors)
+
+            self.send_np(self.fifo_images, self.xy)
+            self.send_np(self.fifo_images, self.scores)
+            self.send_np(self.fifo_images, self.descriptors)
+
+            matches = self.read_np(self.fifo_matches, np.int32)
+            valid = matches > -1
+
+            if self.debug:
+                # Visualization
+                mxy0 = self.prev_xy[valid]
+                mxy1 = self.xy[matches[valid]]
+
+                vis = cv2.cvtColor(frame_gray, cv2.COLOR_GRAY2BGR)
+                for xy0, xy1 in zip(mxy0, mxy1):
+                    cv2.line(vis, tuple(xy0), tuple(xy1), (0, 255, 0), 1)
+                for kp in mxy1:
+                    cv2.circle(vis, (int(kp[0]), int(kp[1])), 3, (0, 255, 0), 1)
+
+                cv2.imshow("Tracking", vis)
+                cv2.waitKey(3)
+
+            self.prev_xy = self.xy[matches[valid]]
+            self.prev_scores = self.scores[matches[valid]]
+            self.prev_scales = self.scales[matches[valid]]
+            self.prev_descriptors = self.descriptors[matches[valid]]
+            self.prev_track_ids = self.prev_track_ids[valid]
+
+        self.prev_frame = frame_gray
 
     def detect_and_describe(self, cv_image):
         # Potentially flip image before detection
@@ -150,7 +234,7 @@ class ImageReceiver:
         scales = descriptor_data[:, 3]
         descriptors = descriptor_data[:, 4:]
 
-        # If the images was flipped we need to flip the keypoint positions
+        # If the image was flipped we need to flip the keypoint positions
         if self.flip_image_for_detection:
             xy = cv_image.shape[:2][::-1] - xy
 
@@ -163,74 +247,11 @@ class ImageReceiver:
             xy[:, 0] < img_w - self.min_distance_to_image_border,
             xy[:, 1] < img_h - self.min_distance_to_image_border)
         keep = np.logical_and(top_and_left, bot_and_right)
-        xy = xy[keep, :2]
-        scores = scores[keep]
-        scales = scales[keep]
-        descriptors = descriptors[keep]
 
-        # If there are no previous keypoints no need for complicated logic
-        if len(self.prev_xy) > 0:
-            # Find new descriptors for the keypoints
-            kdt = spatial.cKDTree(xy)
-            dists, idxs = kdt.query(self.prev_xy)
-
-            replace = dists < self.descriptor_reassociation_thr
-            for i in range(replace.size):
-                if replace[i]:
-                    self.prev_xy[i] = xy[idxs[i]]
-                    self.prev_scales[i] = scales[idxs[i]]
-                    self.prev_scores[i] = scores[idxs[i]]
-                    self.prev_descriptors[i] = descriptors[idxs[i]]
-
-            # Limit number of new detections added to fit with the global limit,
-            # and mask detections to not initialize keypoints that are too close
-            # to previous ones or to new ones
-            quota = self.lk_num_keypoints - self.prev_xy.shape[0]
-            mask = np.ones((cv_image.shape[0], cv_image.shape[1]))
-            for prev_xy in self.prev_xy:
-                x, y = prev_xy.astype(np.int32)
-                cv2.circle(mask, (x, y), self.lk_mask_redetections_thr_px, 0,
-                    cv2.FILLED)
-
-            keep = []
-            for i in range(xy.shape[0]):
-                if quota <= 0:
-                    break
-                x, y = xy[i].astype(np.int32)
-                if mask[y, x]:
-                    keep.append(i)
-                    quota -= 1
-            keep = np.array(keep)
-            if keep.size == 0:
-                return
-
-            # Assign new track ids
-            track_ids = np.arange(
-                self.next_track_id,
-                self.next_track_id + keep.size).astype(np.int32)
-            self.next_track_id += keep.size
-
-            self.prev_xy = np.concatenate([self.prev_xy, xy[keep]])
-            self.prev_scores = np.concatenate([self.prev_scores, scores[keep]])
-            self.prev_scales = np.concatenate([self.prev_scales, scales[keep]])
-            self.prev_descriptors = np.concatenate(
-                [self.prev_descriptors, descriptors[keep]])
-            self.prev_track_ids = np.concatenate(
-                [self.prev_track_ids, track_ids])
-        else:
-            num_new_keypoints = min(xy.shape[0], self.lk_num_keypoints)
-
-            # Assign new track ids
-            track_ids = np.arange(
-                self.next_track_id,
-                self.next_track_id + num_new_keypoints).astype(np.int32)
-            self.next_track_id += num_new_keypoints
-
-            self.prev_xy = xy[:num_new_keypoints].copy()
-            self.prev_scores = scores[:num_new_keypoints].copy()
-            self.prev_scales = scales[:num_new_keypoints].copy()
-            self.prev_descriptors = descriptors[:num_new_keypoints].copy()
-            self.prev_track_ids = track_ids[:num_new_keypoints].copy()
+        self.xy = xy[keep, :2]
+        self.scores = scores[keep]
+        self.scales = scales[keep]
+        self.descriptors = descriptors[keep]
 
         if self.debug:
             if self.flip_image_for_detection:
@@ -303,7 +324,77 @@ class ImageReceiver:
             frame_color = cv2.cvtColor(cv_image, cv2.COLOR_GRAY2BGR)
 
         self.detect_and_describe(frame_color)
-        self.lk_track(frame_gray)
+
+        if self.tracker == 'lk':
+            self.lk_track(frame_gray)
+
+            if len(self.prev_xy) > 0:
+                if self.lk_descriptor_reassociation_thr > 0:
+                    # Find new descriptors for the keypoints
+                    kdt = spatial.cKDTree(self.xy)
+                    dists, idxs = kdt.query(self.prev_xy)
+
+                    replace = dists < self.lk_descriptor_reassociation_thr
+                    for i in range(replace.size):
+                        if replace[i]:
+                            self.prev_xy[i] = self.xy[idxs[i]]
+                            self.prev_scales[i] = self.scales[idxs[i]]
+                            self.prev_scores[i] = self.scores[idxs[i]]
+                            self.prev_descriptors[i] = self.descriptors[idxs[i]]
+
+        elif self.tracker == 'superglue':
+            self.superglue_track(frame_gray)
+
+        if len(self.prev_xy) > 0:
+            # Limit number of new detections added to fit with the global limit,
+            # and mask detections to not initialize keypoints that are too close
+            # to previous ones or to new ones
+            quota = self.num_keypoints - self.prev_xy.shape[0]
+            mask = np.ones((cv_image.shape[0], cv_image.shape[1]))
+            for prev_xy in self.prev_xy:
+                x, y = prev_xy.astype(np.int32)
+                cv2.circle(mask, (x, y), self.mask_redetections_thr_px, 0,
+                    cv2.FILLED)
+
+            keep = []
+            for i in range(self.xy.shape[0]):
+                if quota <= 0:
+                    break
+                x, y = self.xy[i].astype(np.int32)
+                if mask[y, x]:
+                    keep.append(i)
+                    quota -= 1
+            keep = np.array(keep)
+            if keep.size == 0:
+                return
+
+            # Assign new track ids
+            track_ids = np.arange(
+                self.next_track_id,
+                self.next_track_id + keep.size).astype(np.int32)
+            self.next_track_id += keep.size
+
+            self.prev_xy = np.concatenate([self.prev_xy, self.xy[keep]])
+            self.prev_scores = np.concatenate([self.prev_scores, self.scores[keep]])
+            self.prev_scales = np.concatenate([self.prev_scales, self.scales[keep]])
+            self.prev_descriptors = np.concatenate(
+                [self.prev_descriptors, self.descriptors[keep]])
+            self.prev_track_ids = np.concatenate(
+                [self.prev_track_ids, track_ids])
+        else:
+            # If there are no previous keypoints no need for complicated logic
+            num_new_keypoints = min(self.xy.shape[0], self.num_keypoints)
+            self.prev_xy = self.xy[:num_new_keypoints].copy()
+            self.prev_scores = self.scores[:num_new_keypoints].copy()
+            self.prev_scales = self.scales[:num_new_keypoints].copy()
+            self.prev_descriptors = self.descriptors[:num_new_keypoints].copy()
+
+            # Assign new track ids
+            self.prev_track_ids = np.arange(
+                self.next_track_id,
+                self.next_track_id + num_new_keypoints).astype(np.int32)
+            self.next_track_id += num_new_keypoints
+
 
         print('r', self.count_recv)
 
