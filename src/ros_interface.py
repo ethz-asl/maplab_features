@@ -1,9 +1,6 @@
 #!/usr/bin/env python
 from __future__ import print_function
 
-import os
-import errno
-import sys
 import cv2
 import numpy as np
 from scipy import spatial
@@ -14,7 +11,9 @@ from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 from maplab_msgs.msg import Features
 from std_msgs.msg import MultiArrayDimension
+
 from config import LkConfig
+from utils_py2 import open_fifo, read_np, send_np
 from feature_extraction import FeatureExtractionCv, FeatureExtractionExternal
 
 class ImageReceiver:
@@ -44,7 +43,7 @@ class ImageReceiver:
             ValueError('Invalid feature extraction type: {feature}'.format(
                 feature=self.config.feature_extraction))
 
-        self.tracker = 'superglue'
+        self.tracker = 'lk'
 
         if self.tracker == 'lk':
             # LK tracker settings
@@ -58,21 +57,18 @@ class ImageReceiver:
             self.lk_descriptor_reassociation_thr = 3
         elif self.tracker == 'superglue':
             # Pipe for transferring images
-            self.fifo_images = self.open_fifo(
-                '/tmp/maplab_superglue_images', 'wb')
-            self.fifo_matches = self.open_fifo(
-                '/tmp/maplab_superglue_matches', 'rb')
+            self.fifo_images = open_fifo('/tmp/maplab_superglue_images', 'wb')
+            self.fifo_matches = open_fifo('/tmp/maplab_superglue_matches', 'rb')
         else:
             ValueError('Invalid feature tracking method: {tracker}'.format(
                 tracker=self.tracker))
 
         self.num_keypoints = 600
         self.resize_input_image = 640
-        self.flip_image_for_detection = False
         self.min_distance_to_image_border = 30
         self.mask_redetections_thr_px = 7
 
-        self.debug = False
+        self.debug = True
         self.count_recv = 0
 
         # Data on the last processed frame
@@ -84,35 +80,6 @@ class ImageReceiver:
         self.prev_frame = []
 
         self.next_track_id = 0
-
-    def open_fifo(self, file_name, mode):
-        try:
-            os.mkfifo(file_name)
-        except OSError as e:
-            if e.errno != errno.EEXIST:
-                raise
-        return open(file_name, mode)
-
-    def read_bytes(self, file, num_bytes):
-        bytes = b''
-        num_read = 0
-        while num_read < num_bytes:
-            bytes += file.read(num_bytes - num_read)
-            num_read = len(bytes)
-        return bytes
-
-    def send_np(self, file, arr):
-        bytes = arr.tobytes()
-        num_bytes = np.array([len(bytes)], dtype=np.uint32).tobytes()
-        file.write(num_bytes)
-        file.write(bytes)
-        file.flush()
-
-    def read_np(self, file, dtype):
-        num_bytes = self.read_bytes(file, 4)
-        num_bytes = np.frombuffer(num_bytes, dtype=np.uint32)[0]
-        bytes = self.read_bytes(file, num_bytes)
-        return np.frombuffer(bytes, dtype=dtype)
 
     def lk_track(self, frame_gray):
         # Check if there is anything to track
@@ -186,18 +153,18 @@ class ImageReceiver:
             cv_success0, cv_binary0 = cv2.imencode('.png', self.prev_frame)
             cv_success1, cv_binary1 = cv2.imencode('.png', frame_gray)
             assert(cv_success0 and cv_success1)
-            self.send_np(self.fifo_images, cv_binary0)
-            self.send_np(self.fifo_images, cv_binary1)
+            send_np(self.fifo_images, cv_binary0)
+            send_np(self.fifo_images, cv_binary1)
 
-            self.send_np(self.fifo_images, self.prev_xy)
-            self.send_np(self.fifo_images, self.prev_scores)
-            self.send_np(self.fifo_images, self.prev_descriptors)
+            send_np(self.fifo_images, self.prev_xy)
+            send_np(self.fifo_images, self.prev_scores)
+            send_np(self.fifo_images, self.prev_descriptors)
 
-            self.send_np(self.fifo_images, self.xy)
-            self.send_np(self.fifo_images, self.scores)
-            self.send_np(self.fifo_images, self.descriptors)
+            send_np(self.fifo_images, self.xy)
+            send_np(self.fifo_images, self.scores)
+            send_np(self.fifo_images, self.descriptors)
 
-            matches = self.read_np(self.fifo_matches, np.int32)
+            matches = read_np(self.fifo_matches, np.int32)
             valid = matches > -1
 
             if self.debug:
@@ -223,43 +190,28 @@ class ImageReceiver:
         self.prev_frame = frame_gray
 
     def detect_and_describe(self, cv_image):
-        # Potentially flip image before detection
-        if self.flip_image_for_detection:
-            cv_image = np.flip(cv_image)
-
         # Get keypoints and descriptors.
-        descriptor_data = self.feature_extraction.detect_and_describe(cv_image)
-        xy = descriptor_data[:, :2]
-        scores = descriptor_data[:, 2]
-        scales = descriptor_data[:, 3]
-        descriptors = descriptor_data[:, 4:]
-
-        # If the image was flipped we need to flip the keypoint positions
-        if self.flip_image_for_detection:
-            xy = cv_image.shape[:2][::-1] - xy
+        self.xy, self.scores, self.scales, self.descriptors = \
+            self.feature_extraction.detect_and_describe(cv_image)
 
         # Do not detect next to the image border
         img_h, img_w = cv_image.shape[:2]
         top_and_left = np.logical_and(
-            xy[:, 0] > self.min_distance_to_image_border,
-            xy[:, 1] > self.min_distance_to_image_border)
+            self.xy[:, 0] > self.min_distance_to_image_border,
+            self.xy[:, 1] > self.min_distance_to_image_border)
         bot_and_right = np.logical_and(
-            xy[:, 0] < img_w - self.min_distance_to_image_border,
-            xy[:, 1] < img_h - self.min_distance_to_image_border)
+            self.xy[:, 0] < img_w - self.min_distance_to_image_border,
+            self.xy[:, 1] < img_h - self.min_distance_to_image_border)
         keep = np.logical_and(top_and_left, bot_and_right)
 
-        self.xy = xy[keep, :2]
-        self.scores = scores[keep]
-        self.scales = scales[keep]
-        self.descriptors = descriptors[keep]
+        self.xy = self.xy[keep, :2]
+        self.scores = self.scores[keep]
+        self.scales = self.scales[keep]
+        self.descriptors = self.descriptors[keep]
 
         if self.debug:
-            if self.flip_image_for_detection:
-                vis = np.flip(cv_image).copy()
-            else:
-                vis = cv_image.copy()
-
-            for kp in xy:
+            vis = cv_image.copy()
+            for kp in self.xy:
                 cv2.circle(vis, (int(kp[0]), int(kp[1])), 3, (0, 255, 0), 1)
             cv2.imshow("Detections", vis)
             cv2.waitKey(3)

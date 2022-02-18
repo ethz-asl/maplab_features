@@ -5,6 +5,8 @@ import cv2
 import numpy as np
 import torch
 
+from utils_py2 import open_fifo, read_np, send_np
+
 module_path = os.path.abspath(os.path.join('trackers/superglue'))
 if module_path not in sys.path:
     sys.path.append(module_path)
@@ -13,27 +15,6 @@ from models.superpoint import SuperPoint
 from models.utils import frame2tensor
 
 torch.set_grad_enabled(False)
-
-def open_fifo(file_name, mode):
-    try:
-        os.mkfifo(file_name)
-    except FileExistsError:
-        pass
-    return open(file_name, mode)
-
-def read_bytes(file, num_bytes):
-    bytes = b''
-    num_read = 0
-    while num_read < num_bytes:
-        bytes += file.read(num_bytes - num_read)
-        num_read = len(bytes)
-    return bytes
-
-def read_np(file, dtype):
-    num_bytes = read_bytes(file, 4)
-    num_bytes = np.frombuffer(num_bytes, dtype=np.uint32)[0]
-    bytes = read_bytes(file, num_bytes)
-    return np.frombuffer(bytes, dtype=dtype)
 
 class ImageReceiver:
     def __init__(self):
@@ -71,24 +52,11 @@ class ImageReceiver:
         descriptors = pred['descriptors'][0].cpu().numpy()
         descriptors = descriptors.transpose((1, 0))
 
-        # Transmit number of data bytes as well as number of detected keypoints
-        # and the descriptor size to reshape the array
-        scores = np.expand_dims(scores, axis=1)
-        scales = np.expand_dims(scales, axis=1)
-
-        descriptor_data = np.concatenate(
-            [xy, scores, scales, descriptors],
-            axis=1).astype(np.float32).tobytes()
-        num_bytes = len(descriptor_data)
-        num_keypoints = descriptors.shape[0]
-        descriptor_size = descriptors.shape[1]
-        descriptor_header = np.array(
-            [num_bytes, num_keypoints, descriptor_size],
-            dtype=np.uint32).tobytes()
-
-        self.fifo_descriptors.write(descriptor_header)
-        self.fifo_descriptors.write(descriptor_data)
-        self.fifo_descriptors.flush()
+        # Transmit extracted descriptors back
+        send_np(self.fifo_descriptors, xy.astype(np.float32))
+        send_np(self.fifo_descriptors, scores.astype(np.float32))
+        send_np(self.fifo_descriptors, scales.astype(np.float32))
+        send_np(self.fifo_descriptors, descriptors.astype(np.float32))
 
 def main():
     image_receiver = ImageReceiver()

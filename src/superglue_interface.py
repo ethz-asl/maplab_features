@@ -6,6 +6,8 @@ import numpy as np
 import torch
 import matplotlib.cm as cm
 
+from utils_py2 import open_fifo, read_np, send_np
+
 module_path = os.path.abspath(os.path.join('trackers/superglue'))
 if module_path not in sys.path:
     sys.path.append(module_path)
@@ -14,34 +16,6 @@ from models.superglue import SuperGlue
 from models.utils import frame2tensor, make_matching_plot
 
 torch.set_grad_enabled(False)
-
-def open_fifo(file_name, mode):
-    try:
-        os.mkfifo(file_name)
-    except FileExistsError:
-        pass
-    return open(file_name, mode)
-
-def read_bytes(file, num_bytes):
-    bytes = b''
-    num_read = 0
-    while num_read < num_bytes:
-        bytes += file.read(num_bytes - num_read)
-        num_read = len(bytes)
-    return bytes
-
-def read_np(file, dtype):
-    num_bytes = read_bytes(file, 4)
-    num_bytes = np.frombuffer(num_bytes, dtype=np.uint32)[0]
-    bytes = read_bytes(file, num_bytes)
-    return np.frombuffer(bytes, dtype=dtype)
-
-def send_np(file, arr):
-    bytes = arr.tobytes()
-    num_bytes = np.array([len(bytes)], dtype=np.uint32).tobytes()
-    file.write(num_bytes)
-    file.write(bytes)
-    file.flush()
 
 class ImageReceiver:
     def __init__(self):
@@ -74,12 +48,12 @@ class ImageReceiver:
             flags=cv2.IMREAD_GRAYSCALE)
 
         xy0 = read_np(self.fifo_images, np.float32).reshape((-1, 2))
-        scores0 = read_np(self.fifo_images, np.float32)
+        scores0 = read_np(self.fifo_images, np.float32).flatten()
         descriptors0 = read_np(self.fifo_images, np.float32).reshape(
             (-1, self.descriptor_size)).transpose((1, 0))
 
         xy1 = read_np(self.fifo_images, np.float32).reshape((-1, 2))
-        scores1 = read_np(self.fifo_images, np.float32)
+        scores1 = read_np(self.fifo_images, np.float32).flatten()
         descriptors1 = read_np(self.fifo_images, np.float32).reshape(
             (-1, self.descriptor_size)).transpose((1, 0))
 

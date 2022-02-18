@@ -6,6 +6,8 @@ import numpy as np
 import torch
 import torchvision.transforms as tvf
 
+from utils_py2 import open_fifo, read_np, send_np
+
 module_path = os.path.abspath(os.path.join('extractors/r2d2'))
 if module_path not in sys.path:
     sys.path.append(module_path)
@@ -118,21 +120,6 @@ def extract_multiscale( net, img, detector, scale_f=2**0.25,
     D = torch.cat(D)
     return XYS, D, scores
 
-def open_fifo(file_name, mode):
-    try:
-        os.mkfifo(file_name)
-    except FileExistsError:
-        pass
-    return open(file_name, mode)
-
-def read_bytes(file, num_bytes):
-    bytes = b''
-    num_read = 0
-    while num_read < num_bytes:
-        bytes += file.read(num_bytes - num_read)
-        num_read = len(bytes)
-    return bytes
-
 class ImageReceiver:
     def __init__(self):
         # Network related initialization
@@ -154,11 +141,8 @@ class ImageReceiver:
 
     def callback(self):
         # Receive image on pipe and decode
-        num_bytes = read_bytes(self.fifo_images, 4)
-        num_bytes = np.frombuffer(num_bytes, dtype=np.uint32)[0]
-        cv_binary = read_bytes(self.fifo_images, num_bytes)
-        cv_image = cv2.imdecode(np.frombuffer(
-            cv_binary, dtype=np.uint8), flags=1)
+        cv_image = cv2.imdecode(read_np(self.fifo_images, np.uint8),
+            flags=cv2.IMREAD_GRAYSCALE)
 
         # Prepare image for processing
         image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB)
@@ -180,30 +164,15 @@ class ImageReceiver:
 
         idxs = scores.argsort()[-self.config.num_keypoints or None:]
         xy = xys[idxs, :2]
+        scores = scores[idxs]
+        scales = xys[idxs, 2]
         descriptors = descriptors[idxs]
-        scores = np.expand_dims(scores[idxs], axis=1)
-        scales = np.expand_dims(xys[idxs, 2], axis=1)
 
-        # Transmit number of data bytes as well as number of detected keypoints
-        # and the descriptor size to reshape the array
-        descriptor_data = np.concatenate(
-            [xy, scores, scales, descriptors],
-            axis=1).astype(np.float32).tobytes()
-        num_bytes = len(descriptor_data)
-        num_keypoints = descriptors.shape[0]
-        descriptor_size = descriptors.shape[1]
-        descriptor_header = np.array(
-            [num_bytes, num_keypoints, descriptor_size],
-            dtype=np.uint32).tobytes()
-
-        self.fifo_descriptors.write(descriptor_header)
-        self.fifo_descriptors.write(descriptor_data)
-        self.fifo_descriptors.flush()
-
-        #for kp in xy:
-        #    cv2.circle(cv_image, (int(kp[0]), int(kp[1])), 3, (0, 255, 0), 1)
-        #cv2.imshow("Image window", cv_image)
-        #cv2.waitKey(3)
+        # Transmit extracted descriptors back
+        send_np(self.fifo_descriptors, xy.astype(np.float32))
+        send_np(self.fifo_descriptors, scores.astype(np.float32))
+        send_np(self.fifo_descriptors, scales.astype(np.float32))
+        send_np(self.fifo_descriptors, descriptors.astype(np.float32))
 
 def main():
     image_receiver = ImageReceiver()

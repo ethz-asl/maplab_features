@@ -60,7 +60,6 @@ class LkConfig(BaseConfig):
 
         # Feature extraction settings.
         self.feature_extraction = 'cv'
-        self.debug_feature_extraction = False
 
         # OpenCV settings.
         self.cv_feature_detector = 'sift'
@@ -78,7 +77,6 @@ class LkConfig(BaseConfig):
 
         # Feature extraction settings.
         self.feature_extraction = self.try_get_param("~feature_extraction", self.feature_extraction)
-        self.debug_feature_extraction = self.try_get_param("~debug_extraction", self.debug_feature_extraction)
 
         # OpenCV settings.
         self.cv_feature_detector = self.try_get_param("~cv_detector_type", self.cv_feature_detector)

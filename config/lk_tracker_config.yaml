@@ -1,6 +1,6 @@
 # General settings.
-input_topic:            '/VersaVIS/cam1/image_raw'
-output_topic:           '/maplab_features'
+input_topic:            '/VersaVIS/cam0/image_raw'
+output_topic:           '/maplab_features0'
 
 # Feature extraction settings.
 feature_extraction:     'external' # cv or external
@@ -10,7 +10,6 @@ debug_extraction:       False
 # Extraction settings if opencv is used.
 cv_detector_type:       'surf' # SURF, SIFT
 cv_descriptor_type:     'freak' # SURF, SIFT, FREAK, BRIEF
-
 
 # SURF settings.
 surf_hessian_threshold: 300 # default: 100
