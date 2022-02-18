@@ -1,10 +1,7 @@
-[submodule "extractors/r2d2"]
+[submodule "src/extractors/r2d2"]
 	path = src/extractors/r2d2
 	url = https://github.com/naver/r2d2
 
-[submodule "trackers/superglue"]
-	path = src/trackers/superglue
-	url = https://github.com/magicleap/SuperGluePretrainedNetwork.git
 [submodule "src/trackers/superglue"]
 	path = src/trackers/superglue
 	url = https://github.com/magicleap/SuperGluePretrainedNetwork.git
