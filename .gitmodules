@@ -5,3 +5,6 @@
 [submodule "trackers/superglue"]
 	path = src/trackers/superglue
 	url = https://github.com/magicleap/SuperGluePretrainedNetwork.git
+[submodule "src/trackers/superglue"]
+	path = src/trackers/superglue
+	url = https://github.com/magicleap/SuperGluePretrainedNetwork.git
