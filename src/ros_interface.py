@@ -54,7 +54,6 @@ class ImageReceiver:
                     cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 20, 0.01))
             self.lk_max_step_px = 2.0
             self.lk_merge_tracks_thr_px = 3
-            self.lk_descriptor_reassociation_thr = 3
         elif self.tracker == 'superglue':
             # Pipe for transferring images
             self.fifo_images = open_fifo('/tmp/maplab_superglue_images', 'wb')
@@ -279,21 +278,6 @@ class ImageReceiver:
 
         if self.tracker == 'lk':
             self.lk_track(frame_gray)
-
-            if len(self.prev_xy) > 0:
-                if self.lk_descriptor_reassociation_thr > 0:
-                    # Find new descriptors for the keypoints
-                    kdt = spatial.cKDTree(self.xy)
-                    dists, idxs = kdt.query(self.prev_xy)
-
-                    replace = dists < self.lk_descriptor_reassociation_thr
-                    for i in range(replace.size):
-                        if replace[i]:
-                            self.prev_xy[i] = self.xy[idxs[i]]
-                            self.prev_scales[i] = self.scales[idxs[i]]
-                            self.prev_scores[i] = self.scores[idxs[i]]
-                            self.prev_descriptors[i] = self.descriptors[idxs[i]]
-
         elif self.tracker == 'superglue':
             self.superglue_track(frame_gray)
 
@@ -360,4 +344,4 @@ if __name__ == '__main__':
     try:
         rospy.spin()
     except KeyboardInterrupt:
-        print("Shutting down LK tracker.")
+        print("Shutting down.")
