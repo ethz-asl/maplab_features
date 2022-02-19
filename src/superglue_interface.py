@@ -30,9 +30,9 @@ class ImageReceiver:
 
         # Pipe for transferring tracking
         self.fifo_images = open_fifo(
-            '/tmp/maplab_superglue_images', 'rb')
+            '/tmp/maplab_tracking_images', 'rb')
         self.fifo_matches = open_fifo(
-            '/tmp/maplab_superglue_matches', 'wb')
+            '/tmp/maplab_tracking_matches', 'wb')
 
         self.descriptor_size = 256
         self.debug = False

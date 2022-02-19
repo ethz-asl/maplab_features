@@ -1,11 +1,7 @@
 import rospy
 import cv2
-import os
-import errno
-import matplotlib.pyplot as plt
 import numpy as np
 
-from config import LkConfig
 from utils_py2 import open_fifo, read_np, send_np, read_bytes
 
 class FeatureExtractionExternal(object):
