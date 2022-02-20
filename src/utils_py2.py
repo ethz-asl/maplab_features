@@ -36,7 +36,7 @@ def send_np(file, arr):
         rows, cols = arr.shape[0], arr.shape[1]
         arr = arr.flatten()
     else:
-        ValueError("Sending more than 2d numpy arrays not implemented")
+        raise ValueError("Sending more than 2d numpy arrays not implemented")
 
     bytes = arr.tobytes()
     header = np.array([len(bytes), rows, cols], dtype=np.uint32).tobytes()

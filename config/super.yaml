@@ -1,0 +1,14 @@
+# General settings.
+input_topic:            '/alphasense/cam1/image_raw'
+output_topic:           '/maplab_features1'
+resize_image:           640
+debug:                  True
+
+# Feature extraction settings.
+feature_extraction:            'external'
+min_distance_to_image_border:  30
+mask_redetections_thr_px:      7
+
+# Feature tracking settings.
+feature_tracking:   'superglue'
+num_tracked_points:  600

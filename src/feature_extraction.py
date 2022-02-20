@@ -42,8 +42,9 @@ class FeatureExtractionCv(object):
             surf.setNOctaveLayers(config.surf_n_octaves_layers)
             return surf
         else:
-            rospy.logerr('[FeatureDetector] Unknown feature type: {type_name}'.format(type_name=type))
-            return None
+            raise ValueError(
+                '[FeatureDetector] Unknown feature type: {type_name}'.format(
+                    type_name=type))
 
     def init_feature_describer(self, config):
         type = config.cv_feature_descriptor
@@ -60,13 +61,15 @@ class FeatureExtractionCv(object):
             surf.setNOctaveLayers(config.surf_n_octaves_layers)
             return surf
         else:
-            rospy.logerr('[FeatureDetector] Unknown feature type: {type_name}'.format(type_name=type))
-            return None
+            raise ValueError(
+                '[FeatureDetector] Unknown feature type: {type_name}'.format(
+                    type_name=type))
 
     def detect_and_describe(self, cv_img):
         if self.detector is None or self.describer is None:
-            rospy.logerr('[FeatureDetector] Cannot detect features. Initializing failed mostly likely due to a bad configuration.')
-            return np.array([])
+            raise ValueError(
+                '''[FeatureDetector] Cannot detect features. Initializing
+                failed mostly likely due to a bad configuration.''')
 
         keypoints = self.detector.detect(cv_img, None)
         keypoints, descriptors = self.describer.compute(cv_img, keypoints)
@@ -85,6 +88,6 @@ class FeatureExtractionCv(object):
         for i in range(n_keypoints):
             xy[i] = [keypoints[i].pt[0], keypoints[i].pt[1]]
             scores[i] = keypoints[i].response
-            features[i] = keypoints[i].octave
+            scales[i] = keypoints[i].octave
             descriptors[i] = descriptors[i,:]
-        return xy, scores, features, descriptors
+        return xy, scores, scales, descriptors

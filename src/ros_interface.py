@@ -11,19 +11,20 @@ from cv_bridge import CvBridge
 from maplab_msgs.msg import Features
 from std_msgs.msg import MultiArrayDimension
 
-from config import LkConfig
+from config import MainConfig
 from utils_py2 import open_fifo, read_np, send_np
 from feature_extraction import FeatureExtractionCv, FeatureExtractionExternal
 from feature_tracking import FeatureTrackingLK, FeatureTrackingExternal
 
 class ImageReceiver:
     def __init__(self):
-        self.config = LkConfig()
+        self.config = MainConfig()
         self.config.init_from_config()
 
         # Image subscriber
         self.image_sub = rospy.Subscriber(
-                self.config.input_topic, Image, self.image_callback, queue_size=4000)
+                self.config.input_topic, Image, self.image_callback,
+                queue_size=4000)
         self.descriptor_pub = rospy.Publisher(
                 self.config.output_topic, Features, queue_size=100)
         rospy.loginfo('[ImageReceiver] Subscribed to {in_topic} and ' +
@@ -40,26 +41,16 @@ class ImageReceiver:
         elif self.config.feature_extraction == 'external':
             self.feature_extraction = FeatureExtractionExternal(self.config)
         else:
-            ValueError('Invalid feature extraction type: {feature}'.format(
+            raise ValueError('Invalid feature extraction type: {feature}'.format(
                 feature=self.config.feature_extraction))
 
-        self.tracker = 'superglue'
-
-        if self.tracker == 'lk':
+        if self.config.feature_tracking == 'lk':
             self.feature_tracking = FeatureTrackingLK(self.config)
-        elif self.tracker == 'superglue':
+        elif self.config.feature_tracking == 'superglue':
             self.feature_tracking = FeatureTrackingExternal(self.config)
         else:
-            ValueError('Invalid feature tracking method: {tracker}'.format(
-                tracker=self.tracker))
-
-        self.num_keypoints = 600
-        self.resize_input_image = 640
-        self.min_distance_to_image_border = 30
-        self.mask_redetections_thr_px = 7
-
-        self.debug = True
-        self.count_recv = 0
+            raise ValueError('Invalid feature tracking method: {tracker}'.format(
+                tracker=self.config.feature_tracking))
 
         # Data on the last processed frame
         self.prev_xy = []
@@ -69,7 +60,10 @@ class ImageReceiver:
         self.prev_track_ids = []
         self.prev_frame = []
 
+        # Initialize internal counters
+        self.count_received_images = 0
         self.next_track_id = 0
+
 
     def detect_and_describe(self, cv_image):
         # Get keypoints and descriptors.
@@ -79,11 +73,11 @@ class ImageReceiver:
         # Do not detect next to the image border
         img_h, img_w = cv_image.shape[:2]
         top_and_left = np.logical_and(
-            self.xy[:, 0] > self.min_distance_to_image_border,
-            self.xy[:, 1] > self.min_distance_to_image_border)
+            self.xy[:, 0] > self.config.min_distance_to_image_border,
+            self.xy[:, 1] > self.config.min_distance_to_image_border)
         bot_and_right = np.logical_and(
-            self.xy[:, 0] < img_w - self.min_distance_to_image_border,
-            self.xy[:, 1] < img_h - self.min_distance_to_image_border)
+            self.xy[:, 0] < img_w - self.config.min_distance_to_image_border,
+            self.xy[:, 1] < img_h - self.config.min_distance_to_image_border)
         keep = np.logical_and(top_and_left, bot_and_right)
 
         self.xy = self.xy[keep, :2]
@@ -91,7 +85,7 @@ class ImageReceiver:
         self.scales = self.scales[keep]
         self.descriptors = self.descriptors[keep]
 
-        if self.debug:
+        if self.config.debug:
             vis = cv_image.copy()
             for kp in self.xy:
                 cv2.circle(vis, (int(kp[0]), int(kp[1])), 3, (0, 255, 0), 1)
@@ -108,8 +102,10 @@ class ImageReceiver:
         feature_msg = Features()
         feature_msg.header.stamp = stamp
         feature_msg.numKeypointMeasurements = num_keypoints
-        feature_msg.keypointMeasurementsX = (self.prev_xy[:, 0] / self.scale).tolist()
-        feature_msg.keypointMeasurementsY = (self.prev_xy[:, 1] / self.scale).tolist()
+        feature_msg.keypointMeasurementsX = (
+            self.prev_xy[:, 0] / self.scale).tolist()
+        feature_msg.keypointMeasurementsY = (
+            self.prev_xy[:, 1] / self.scale).tolist()
         feature_msg.keypointMeasurementUncertainties = [0.8] * num_keypoints
         feature_msg.keypointScales = self.prev_scales.tolist()
         feature_msg.keypointScores = self.prev_scores.tolist()
@@ -142,11 +138,11 @@ class ImageReceiver:
         except CvBridgeError as e:
             print(e)
 
-        self.count_recv += 1
+        self.count_received_images += 1
 
-        if self.resize_input_image != -1:
+        if self.config.resize_input_image != -1:
             h, w = cv_image.shape[:2]
-            self.scale = self.resize_input_image / float(max(h, w))
+            self.scale = self.config.resize_input_image / float(max(h, w))
             nh, nw = int(h * self.scale), int(w * self.scale)
             cv_image = cv2.resize(cv_image, (nw, nh))
 
@@ -176,12 +172,12 @@ class ImageReceiver:
             # Limit number of new detections added to fit with the global limit,
             # and mask detections to not initialize keypoints that are too close
             # to previous ones or to new ones
-            quota = self.num_keypoints - self.prev_xy.shape[0]
+            quota = self.config.num_tracked_points - self.prev_xy.shape[0]
             mask = np.ones((cv_image.shape[0], cv_image.shape[1]))
             for kp in self.prev_xy:
                 x, y = kp.astype(np.int32)
-                cv2.circle(mask, (x, y), self.mask_redetections_thr_px, 0,
-                    cv2.FILLED)
+                cv2.circle(mask, (x, y), self.config.mask_redetections_thr_px,
+                    0, cv2.FILLED)
 
             keep = []
             for i in range(self.xy.shape[0]):
@@ -201,15 +197,18 @@ class ImageReceiver:
                 self.next_track_id += keep.size
 
                 self.prev_xy = np.concatenate([self.prev_xy, self.xy[keep]])
-                self.prev_scores = np.concatenate([self.prev_scores, self.scores[keep]])
-                self.prev_scales = np.concatenate([self.prev_scales, self.scales[keep]])
+                self.prev_scores = np.concatenate(
+                    [self.prev_scores, self.scores[keep]])
+                self.prev_scales = np.concatenate(
+                    [self.prev_scales, self.scales[keep]])
                 self.prev_descriptors = np.concatenate(
                     [self.prev_descriptors, self.descriptors[keep]])
                 self.prev_track_ids = np.concatenate(
                     [self.prev_track_ids, track_ids])
         else:
             # If there are no previous keypoints no need for complicated logic
-            num_new_keypoints = min(self.xy.shape[0], self.num_keypoints)
+            num_new_keypoints = min(
+                self.xy.shape[0], self.config.num_tracked_points)
             self.prev_xy = self.xy[:num_new_keypoints].copy()
             self.prev_scores = self.scores[:num_new_keypoints].copy()
             self.prev_scales = self.scales[:num_new_keypoints].copy()
@@ -221,7 +220,7 @@ class ImageReceiver:
                 self.next_track_id + num_new_keypoints).astype(np.int32)
             self.next_track_id += num_new_keypoints
 
-        print('received', self.count_recv)
+        print('received', self.count_received_images)
 
         if len(self.prev_xy) > 0:
             self.publish_features(image_msg.header.stamp)

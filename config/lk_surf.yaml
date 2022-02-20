@@ -1,0 +1,28 @@
+# General settings.
+input_topic:            '/alphasense/cam1/image_raw'
+output_topic:           '/maplab_features1'
+resize_image:           640
+debug:                  True
+
+# Feature extraction settings.
+feature_extraction:            'cv'
+min_distance_to_image_border:  30
+mask_redetections_thr_px:      7
+
+# Feature tracking settings.
+feature_tracking:        'lk'
+num_tracked_points:      600
+
+# OpenCV settings
+cv_detector_type:       'surf'
+cv_descriptor_type:     'freak'
+
+# SURF settings.
+surf_hessian_threshold: 300
+surf_n_octaves: 4
+surf_n_octaves_layers: 3
+
+# LK tracker
+lk_window_size: 15
+lk_max_step_error_px: 1.0
+lk_merge_tracks_thr_px: 3

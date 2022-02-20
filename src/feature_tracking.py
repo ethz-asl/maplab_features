@@ -22,8 +22,6 @@ class FeatureTrackingExternal(object):
         self.fifo_images = open_fifo('/tmp/maplab_tracking_images', 'wb')
         self.fifo_matches = open_fifo('/tmp/maplab_tracking_matches', 'rb')
 
-        self.debug = True
-
     def track(
             self, frame0, frame1, xy0, xy1, scores0, scores1, scales0, scales1,
             descriptors0, descriptors1, track_ids0):
@@ -45,7 +43,7 @@ class FeatureTrackingExternal(object):
         matches = read_np(self.fifo_matches, np.int32)
         valid = matches > -1
 
-        if self.debug:
+        if self.config.debug:
             visualize_tracking(frame1, xy0[valid], xy1[matches[valid]])
 
         # Filter out invalid matches (i.e. points that do not have a
@@ -66,14 +64,12 @@ class FeatureTrackingLK(object):
 
         # LK tracker settings
         self.lk_params = dict(
-            winSize  = (15, 15),
-            maxLevel = 2,
+            winSize  = (self.config.lk_window_size, self.config.lk_window_size),
+            maxLevel = self.config.lk_max_level,
             criteria = (
-                cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 20, 0.01))
-        self.lk_max_step_px = 2.0
-        self.lk_merge_tracks_thr_px = 3
-
-        self.debug = True
+                cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT,
+                self.config.lk_stop_criteria_steps,
+                self.config.lk_stop_criteria_eps))
 
     def track(
             self, frame0, frame1, xy0, xy1, scores0, scores1, scales0, scales1,
@@ -98,7 +94,7 @@ class FeatureTrackingLK(object):
         for i in idxs:
             x, y = xy0[i].astype(np.int32)
 
-            if d[i] >= self.lk_max_step_px:
+            if d[i] >= self.config.lk_max_step_error_px:
                 continue
 
             if (y < 0 or y >= frame1.shape[0] or
@@ -107,12 +103,12 @@ class FeatureTrackingLK(object):
 
             if mask[y, x]:
                 keep.append(i)
-                cv2.circle(mask, (x, y), self.lk_merge_tracks_thr_px, 0,
+                cv2.circle(mask, (x, y), self.config.lk_merge_tracks_thr_px, 0,
                     cv2.FILLED)
         keep = np.array(keep).astype(np.int)
 
-        if self.debug:
-            visualize_tracking(frame0, xy0[keep].astype(np.int),
+        if self.config.debug:
+            visualize_tracking(frame1, xy0[keep].astype(np.int),
                 p1[keep].reshape(-1, 2).astype(np.int))
 
         # Drop bad keypoints

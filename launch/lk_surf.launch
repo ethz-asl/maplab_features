@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<launch>
+  <arg name="config_file" default="$(find maplab_features)/config/lk_surf.yaml"/>
+  <arg name="node_name"   default="lk_surf"/>
+  <node name="$(arg node_name)" pkg="maplab_features" type="ros_interface.py" output="screen">
+    <rosparam command="load" file="$(arg config_file)"/>
+  </node>
+</launch>
