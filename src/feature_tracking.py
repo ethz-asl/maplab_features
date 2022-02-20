@@ -18,10 +18,6 @@ class FeatureTrackingExternal(object):
     def __init__(self, config):
         self.config = config
 
-        # Pipe for transferring images
-        self.fifo_images = open_fifo('/tmp/maplab_tracking_images', 'wb')
-        self.fifo_matches = open_fifo('/tmp/maplab_tracking_matches', 'rb')
-
     def track(
             self, frame0, frame1, xy0, xy1, scores0, scores1, scales0, scales1,
             descriptors0, descriptors1, track_ids0):
@@ -29,18 +25,18 @@ class FeatureTrackingExternal(object):
         cv_success0, cv_binary0 = cv2.imencode('.png', frame0)
         cv_success1, cv_binary1 = cv2.imencode('.png', frame1)
         assert(cv_success0 and cv_success1)
-        send_np(self.fifo_images, cv_binary0)
-        send_np(self.fifo_images, cv_binary1)
+        send_np(self.config.fifo_tracking_out, cv_binary0)
+        send_np(self.config.fifo_tracking_out, cv_binary1)
 
-        send_np(self.fifo_images, xy0)
-        send_np(self.fifo_images, scores0)
-        send_np(self.fifo_images, descriptors0)
+        send_np(self.config.fifo_tracking_out, xy0)
+        send_np(self.config.fifo_tracking_out, scores0)
+        send_np(self.config.fifo_tracking_out, descriptors0)
 
-        send_np(self.fifo_images, xy1)
-        send_np(self.fifo_images, scores1)
-        send_np(self.fifo_images, descriptors1)
+        send_np(self.config.fifo_tracking_out, xy1)
+        send_np(self.config.fifo_tracking_out, scores1)
+        send_np(self.config.fifo_tracking_out, descriptors1)
 
-        matches = read_np(self.fifo_matches, np.int32)
+        matches = read_np(self.config.fifo_tracking_in, np.int32)
         valid = matches > -1
 
         if self.config.debug:

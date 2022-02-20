@@ -17,9 +17,8 @@ from feature_extraction import FeatureExtractionCv, FeatureExtractionExternal
 from feature_tracking import FeatureTrackingLK, FeatureTrackingExternal
 
 class ImageReceiver:
-    def __init__(self):
-        self.config = MainConfig()
-        self.config.init_from_config()
+    def __init__(self, config):
+        self.config = config
 
         # Image subscriber
         self.image_sub = rospy.Subscriber(
@@ -226,8 +225,25 @@ class ImageReceiver:
             self.publish_features(image_msg.header.stamp)
 
 if __name__ == '__main__':
-    rospy.init_node('lk_tracker', anonymous=True)
-    receiver = ImageReceiver()
+    rospy.init_node('maplab_features', anonymous=True)
+
+    config = MainConfig()
+    config.init_from_config()
+
+    # Initialize pipes for external transfer
+    if config.feature_extraction == 'external':
+        config.fifo_features_out = open_fifo(
+            '/tmp/maplab_features_images', 'wb')
+        config.fifo_features_in = open_fifo(
+            '/tmp/maplab_features_descriptors', 'rb')
+
+    if config.feature_tracking == 'superglue':
+        config.fifo_tracking_out = open_fifo(
+            '/tmp/maplab_tracking_images', 'wb')
+        config.fifo_tracking_in = open_fifo(
+            '/tmp/maplab_tracking_matches', 'rb')
+
+    receiver = ImageReceiver(config)
 
     try:
         rospy.spin()

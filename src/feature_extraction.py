@@ -8,20 +8,16 @@ class FeatureExtractionExternal(object):
     def __init__(self, config):
         self.config = config
 
-        # Pipe for transferring images
-        self.fifo_images = open_fifo('/tmp/maplab_features_images', 'wb')
-        self.fifo_descriptors = open_fifo('/tmp/maplab_features_descriptors', 'rb')
-
     def detect_and_describe(self, cv_img):
         # Transmit image for processing
         cv_success, cv_binary = cv2.imencode('.png', cv_img)
         assert(cv_success)
-        send_np(self.fifo_images, cv_binary)
+        send_np(self.config.fifo_features_out, cv_binary)
 
-        xy = read_np(self.fifo_descriptors, np.float32)
-        scores = read_np(self.fifo_descriptors, np.float32)
-        scales = read_np(self.fifo_descriptors, np.float32)
-        descriptors = read_np(self.fifo_descriptors, np.float32)
+        xy = read_np(self.config.fifo_features_in, np.float32)
+        scores = read_np(self.config.fifo_features_in, np.float32)
+        scales = read_np(self.config.fifo_features_in, np.float32)
+        descriptors = read_np(self.config.fifo_features_in, np.float32)
 
         return xy, scores, scales, descriptors
 
