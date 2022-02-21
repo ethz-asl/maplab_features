@@ -4,28 +4,48 @@ import numpy as np
 
 from utils_py2 import open_fifo, read_np, send_np, read_bytes
 
+def visualize_detections(frame, xy, index):
+    vis = frame.copy()
+    for kp in xy:
+        cv2.circle(vis, (int(kp[0]), int(kp[1])), 3, (0, 255, 0), 1)
+    cv2.imshow("Detections {index}".format(index=index), vis)
+    cv2.waitKey(3)
+
 class FeatureExtractionExternal(object):
-    def __init__(self, config):
+    def __init__(self, config, index):
         self.config = config
+        self.index = index
 
     def detect_and_describe(self, cv_img):
-        # Transmit image for processing
+        # Encode image.
         cv_success, cv_binary = cv2.imencode('.png', cv_img)
         assert(cv_success)
+
+        # Lock thread for transmission duration.
+        self.config.lock_features.acquire()
+
+        # Send image to external module.
         send_np(self.config.fifo_features_out, cv_binary)
 
+        # Receive detected features.
         xy = read_np(self.config.fifo_features_in, np.float32)
         scores = read_np(self.config.fifo_features_in, np.float32)
         scales = read_np(self.config.fifo_features_in, np.float32)
         descriptors = read_np(self.config.fifo_features_in, np.float32)
 
+        if self.config.debug_detections:
+            visualize_detections(cv_img, xy, self.index)
+
+        self.config.lock_features.release()
+
         return xy, scores, scales, descriptors
 
 class FeatureExtractionCv(object):
-    def __init__(self, config):
+    def __init__(self, config, index):
         self.config = config
         self.detector = self.init_feature_detector(config)
         self.describer = self.init_feature_describer(config)
+        self.index = index
 
     def init_feature_detector(self, config):
         type = config.cv_feature_detector
@@ -69,12 +89,20 @@ class FeatureExtractionCv(object):
 
         keypoints = self.detector.detect(cv_img, None)
         keypoints, descriptors = self.describer.compute(cv_img, keypoints)
-        return self.cv_keypoints_to_features(keypoints, descriptors)
+        xy, scores, scales, descriptors = self.cv_keypoints_to_features(
+            keypoints, descriptors)
+
+        if self.config.debug_detections:
+            self.config.lock_features.acquire()
+            visualize_detections(cv_img, xy, self.index)
+            self.config.lock_features.release()
+
+        return xy, scores, scales, descriptors
 
     def cv_keypoints_to_features(self, keypoints, descriptors):
         n_keypoints = len(keypoints)
         if n_keypoints == 0:
-            return np.array([])
+            return np.array([]), np.array([]), np.array([]), np.array([])
         assert n_keypoints == descriptors.shape[0]
 
         xy = np.zeros((n_keypoints, 2))

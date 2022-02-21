@@ -1,8 +1,18 @@
 # General settings.
-input_topic:            '/alphasense/cam1/image_raw'
-output_topic:           '/maplab_features1'
+input_topic:            '/alphasense/cam0/image_raw,
+                         /alphasense/cam1/image_raw,
+                         /alphasense/cam2/image_raw,
+                         /alphasense/cam3/image_raw,
+                         /alphasense/cam4/image_raw'
+output_topic:           '/maplab_features0,
+                         /maplab_features1,
+                         /maplab_features2,
+                         /maplab_features3,
+                         /maplab_features4'
+
 resize_image:           640
-debug:                  True
+debug_detections:       False
+debug_tracking:         False
 
 # Feature extraction settings.
 feature_extraction:            'external'

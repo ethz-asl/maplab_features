@@ -4,27 +4,33 @@ import numpy as np
 
 from utils_py2 import open_fifo, read_np, send_np, read_bytes
 
-def visualize_tracking(frame, xy0, xy1):
+def visualize_tracking(frame, xy0, xy1, index):
     vis = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
     for kp0, kp1 in zip(xy0, xy1):
         cv2.line(vis, tuple(kp0), tuple(kp1), (0, 255, 0), 1)
     for kp in xy1:
         cv2.circle(vis, (int(kp[0]), int(kp[1])), 3, (0, 255, 0), 1)
 
-    cv2.imshow("Tracking", vis)
+    cv2.imshow("Tracking {index}".format(index=index), vis)
     cv2.waitKey(3)
 
 class FeatureTrackingExternal(object):
-    def __init__(self, config):
+    def __init__(self, config, index):
         self.config = config
+        self.index = index
 
     def track(
             self, frame0, frame1, xy0, xy1, scores0, scores1, scales0, scales1,
             descriptors0, descriptors1, track_ids0):
-        # Transmit images for processing
+        # Encode images.
         cv_success0, cv_binary0 = cv2.imencode('.png', frame0)
         cv_success1, cv_binary1 = cv2.imencode('.png', frame1)
         assert(cv_success0 and cv_success1)
+
+        # Lock thread for transmission duration.
+        self.config.lock_tracking.acquire()
+
+        # Send images and features to external module.
         send_np(self.config.fifo_tracking_out, cv_binary0)
         send_np(self.config.fifo_tracking_out, cv_binary1)
 
@@ -36,11 +42,15 @@ class FeatureTrackingExternal(object):
         send_np(self.config.fifo_tracking_out, scores1)
         send_np(self.config.fifo_tracking_out, descriptors1)
 
+        # Receive matches (where -1 means to match found).
         matches = read_np(self.config.fifo_tracking_in, np.int32)
         valid = matches > -1
 
-        if self.config.debug:
-            visualize_tracking(frame1, xy0[valid], xy1[matches[valid]])
+        if self.config.debug_tracking:
+            visualize_tracking(
+                frame1, xy0[valid], xy1[matches[valid]], self.index)
+
+        self.config.lock_tracking.release()
 
         # Filter out invalid matches (i.e. points that do not have a
         # correspondence in the previous frame)
@@ -55,8 +65,9 @@ class FeatureTrackingExternal(object):
         return xy1, scores1, scales1, descriptors1, track_ids1
 
 class FeatureTrackingLK(object):
-    def __init__(self, config):
+    def __init__(self, config, index):
         self.config = config
+        self.index = index
 
         # LK tracker settings
         self.lk_params = dict(
@@ -103,9 +114,11 @@ class FeatureTrackingLK(object):
                     cv2.FILLED)
         keep = np.array(keep).astype(np.int)
 
-        if self.config.debug:
+        if self.config.debug_tracking:
+            self.config.lock_tracking.acquire()
             visualize_tracking(frame1, xy0[keep].astype(np.int),
-                p1[keep].reshape(-1, 2).astype(np.int))
+                p1[keep].reshape(-1, 2).astype(np.int), self.index)
+            self.config.lock_tracking.release()
 
         # Drop bad keypoints
         if keep.size != 0:

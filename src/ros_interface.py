@@ -3,6 +3,7 @@ from __future__ import print_function
 
 import cv2
 import numpy as np
+import threading
 
 import rospy
 import rosbag
@@ -17,36 +18,42 @@ from feature_extraction import FeatureExtractionCv, FeatureExtractionExternal
 from feature_tracking import FeatureTrackingLK, FeatureTrackingExternal
 
 class ImageReceiver:
-    def __init__(self, config):
+    def __init__(self, config, index):
         self.config = config
+        self.index = index
 
         # Image subscriber
         self.image_sub = rospy.Subscriber(
-                self.config.input_topic, Image, self.image_callback,
-                queue_size=4000)
+            self.config.input_topic[self.index], Image,
+            self.image_callback, queue_size=4000)
         self.descriptor_pub = rospy.Publisher(
-                self.config.output_topic, Features, queue_size=100)
-        rospy.loginfo('[ImageReceiver] Subscribed to {in_topic} and ' +
-            'publishing to {out_topic}'.format(
-                in_topic=self.config.input_topic,
-                out_topic=self.config.output_topic))
+            self.config.output_topic[self.index], Features,
+            queue_size=100)
+        rospy.loginfo('[ImageReceiver] Subscribed to {in_topic}'.format(
+                in_topic=self.config.input_topic[self.index]) +
+            ' and publishing to {out_topic}'.format(
+                out_topic=self.config.output_topic[self.index]))
 
         # CV bridge for conversion
         self.bridge = CvBridge()
 
         # Feature detection and description
         if self.config.feature_extraction == 'cv':
-            self.feature_extraction = FeatureExtractionCv(self.config)
+            self.feature_extraction = FeatureExtractionCv(
+                self.config, self.index)
         elif self.config.feature_extraction == 'external':
-            self.feature_extraction = FeatureExtractionExternal(self.config)
+            self.feature_extraction = FeatureExtractionExternal(
+                self.config, self.index)
         else:
             raise ValueError('Invalid feature extraction type: {feature}'.format(
                 feature=self.config.feature_extraction))
 
         if self.config.feature_tracking == 'lk':
-            self.feature_tracking = FeatureTrackingLK(self.config)
+            self.feature_tracking = FeatureTrackingLK(
+                self.config, self.index)
         elif self.config.feature_tracking == 'superglue':
-            self.feature_tracking = FeatureTrackingExternal(self.config)
+            self.feature_tracking = FeatureTrackingExternal(
+                self.config, self.index)
         else:
             raise ValueError('Invalid feature tracking method: {tracker}'.format(
                 tracker=self.config.feature_tracking))
@@ -69,27 +76,74 @@ class ImageReceiver:
         self.xy, self.scores, self.scales, self.descriptors = \
             self.feature_extraction.detect_and_describe(cv_image)
 
-        # Do not detect next to the image border
-        img_h, img_w = cv_image.shape[:2]
-        top_and_left = np.logical_and(
-            self.xy[:, 0] > self.config.min_distance_to_image_border,
-            self.xy[:, 1] > self.config.min_distance_to_image_border)
-        bot_and_right = np.logical_and(
-            self.xy[:, 0] < img_w - self.config.min_distance_to_image_border,
-            self.xy[:, 1] < img_h - self.config.min_distance_to_image_border)
-        keep = np.logical_and(top_and_left, bot_and_right)
+        if len(self.xy) > 0:
+            # Do not detect next to the image border
+            img_h, img_w = cv_image.shape[:2]
+            top_and_left = np.logical_and(
+                self.xy[:, 0] > self.config.min_distance_to_image_border,
+                self.xy[:, 1] > self.config.min_distance_to_image_border)
+            bot_and_right = np.logical_and(
+                self.xy[:, 0] < img_w - self.config.min_distance_to_image_border,
+                self.xy[:, 1] < img_h - self.config.min_distance_to_image_border)
+            keep = np.logical_and(top_and_left, bot_and_right)
 
-        self.xy = self.xy[keep, :2]
-        self.scores = self.scores[keep]
-        self.scales = self.scales[keep]
-        self.descriptors = self.descriptors[keep]
+            self.xy = self.xy[keep, :2]
+            self.scores = self.scores[keep]
+            self.scales = self.scales[keep]
+            self.descriptors = self.descriptors[keep]
 
-        if self.config.debug:
-            vis = cv_image.copy()
-            for kp in self.xy:
-                cv2.circle(vis, (int(kp[0]), int(kp[1])), 3, (0, 255, 0), 1)
-            cv2.imshow("Detections", vis)
-            cv2.waitKey(3)
+    def initialize_new_tracks(self, cv_image):
+        if len(self.prev_xy) > 0:
+            # Limit number of new detections added to fit with the global limit,
+            # and mask detections to not initialize keypoints that are too close
+            # to previous ones or to new ones
+            quota = self.config.num_tracked_points - self.prev_xy.shape[0]
+            mask = np.ones((cv_image.shape[0], cv_image.shape[1]))
+            for kp in self.prev_xy:
+                x, y = kp.astype(np.int32)
+                cv2.circle(mask, (x, y), self.config.mask_redetections_thr_px,
+                    0, cv2.FILLED)
+
+            keep = []
+            for i in range(self.xy.shape[0]):
+                if quota <= 0:
+                    break
+                x, y = self.xy[i].astype(np.int32)
+                if mask[y, x]:
+                    keep.append(i)
+                    quota -= 1
+            keep = np.array(keep)
+
+            # Assign new track ids
+            if keep.size > 0:
+                track_ids = np.arange(
+                    self.next_track_id,
+                    self.next_track_id + keep.size).astype(np.int32)
+                self.next_track_id += keep.size
+
+                self.prev_xy = np.concatenate([self.prev_xy, self.xy[keep]])
+                self.prev_scores = np.concatenate(
+                    [self.prev_scores, self.scores[keep]])
+                self.prev_scales = np.concatenate(
+                    [self.prev_scales, self.scales[keep]])
+                self.prev_descriptors = np.concatenate(
+                    [self.prev_descriptors, self.descriptors[keep]])
+                self.prev_track_ids = np.concatenate(
+                    [self.prev_track_ids, track_ids])
+        else:
+            # If there are no previous keypoints no need for complicated logic
+            num_new_keypoints = min(
+                self.xy.shape[0], self.config.num_tracked_points)
+            self.prev_xy = self.xy[:num_new_keypoints].copy()
+            self.prev_scores = self.scores[:num_new_keypoints].copy()
+            self.prev_scales = self.scales[:num_new_keypoints].copy()
+            self.prev_descriptors = self.descriptors[:num_new_keypoints].copy()
+
+            # Assign new track ids
+            self.prev_track_ids = np.arange(
+                self.next_track_id,
+                self.next_track_id + num_new_keypoints).astype(np.int32)
+            self.next_track_id += num_new_keypoints
 
     def publish_features(self, stamp):
         num_keypoints = int(self.prev_xy.shape[0])
@@ -167,59 +221,12 @@ class ImageReceiver:
                     self.prev_track_ids)
         self.prev_frame = frame_gray
 
-        if len(self.prev_xy) > 0:
-            # Limit number of new detections added to fit with the global limit,
-            # and mask detections to not initialize keypoints that are too close
-            # to previous ones or to new ones
-            quota = self.config.num_tracked_points - self.prev_xy.shape[0]
-            mask = np.ones((cv_image.shape[0], cv_image.shape[1]))
-            for kp in self.prev_xy:
-                x, y = kp.astype(np.int32)
-                cv2.circle(mask, (x, y), self.config.mask_redetections_thr_px,
-                    0, cv2.FILLED)
+        if len(self.xy) > 0:
+            self.initialize_new_tracks(frame_gray)
 
-            keep = []
-            for i in range(self.xy.shape[0]):
-                if quota <= 0:
-                    break
-                x, y = self.xy[i].astype(np.int32)
-                if mask[y, x]:
-                    keep.append(i)
-                    quota -= 1
-            keep = np.array(keep)
-
-            # Assign new track ids
-            if keep.size > 0:
-                track_ids = np.arange(
-                    self.next_track_id,
-                    self.next_track_id + keep.size).astype(np.int32)
-                self.next_track_id += keep.size
-
-                self.prev_xy = np.concatenate([self.prev_xy, self.xy[keep]])
-                self.prev_scores = np.concatenate(
-                    [self.prev_scores, self.scores[keep]])
-                self.prev_scales = np.concatenate(
-                    [self.prev_scales, self.scales[keep]])
-                self.prev_descriptors = np.concatenate(
-                    [self.prev_descriptors, self.descriptors[keep]])
-                self.prev_track_ids = np.concatenate(
-                    [self.prev_track_ids, track_ids])
-        else:
-            # If there are no previous keypoints no need for complicated logic
-            num_new_keypoints = min(
-                self.xy.shape[0], self.config.num_tracked_points)
-            self.prev_xy = self.xy[:num_new_keypoints].copy()
-            self.prev_scores = self.scores[:num_new_keypoints].copy()
-            self.prev_scales = self.scales[:num_new_keypoints].copy()
-            self.prev_descriptors = self.descriptors[:num_new_keypoints].copy()
-
-            # Assign new track ids
-            self.prev_track_ids = np.arange(
-                self.next_track_id,
-                self.next_track_id + num_new_keypoints).astype(np.int32)
-            self.next_track_id += num_new_keypoints
-
-        print('received', self.count_received_images)
+        if self.count_received_images % 10 == 0:
+            print('topic {index} recv {count}'.format(
+                index=self.index, count=self.count_received_images))
 
         if len(self.prev_xy) > 0:
             self.publish_features(image_msg.header.stamp)
@@ -236,14 +243,18 @@ if __name__ == '__main__':
             '/tmp/maplab_features_images', 'wb')
         config.fifo_features_in = open_fifo(
             '/tmp/maplab_features_descriptors', 'rb')
+    config.lock_features = threading.Lock()
 
     if config.feature_tracking == 'superglue':
         config.fifo_tracking_out = open_fifo(
             '/tmp/maplab_tracking_images', 'wb')
         config.fifo_tracking_in = open_fifo(
             '/tmp/maplab_tracking_matches', 'rb')
+    config.lock_tracking = threading.Lock()
 
-    receiver = ImageReceiver(config)
+    receivers = []
+    for i in range(len(config.input_topic)):
+        receivers.append(ImageReceiver(config, i))
 
     try:
         rospy.spin()

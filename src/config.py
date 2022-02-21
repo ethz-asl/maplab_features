@@ -58,7 +58,8 @@ class MainConfig(BaseConfig):
         self.input_topic = ''
         self.output_topic = ''
         self.resize_input_image = 640
-        self.debug = False
+        self.debug_detections = False
+        self.debug_tracking = False
 
         # Feature extraction settings.
         self.feature_extraction = 'cv'       # cv, external
@@ -95,9 +96,14 @@ class MainConfig(BaseConfig):
             "~input_topic", self.input_topic)
         self.output_topic = self.try_get_param(
             "~output_topic", self.output_topic)
+        self.input_topic = [t.strip() for t in self.input_topic.split(',')]
+        self.output_topic = [t.strip() for t in self.output_topic.split(',')]
         self.resize_input_image = self.try_get_param(
             "~resize_input_image", self.resize_input_image)
-        self.debug = self.try_get_param("~debug", self.debug)
+        self.debug_detections = self.try_get_param(
+            "~debug_detections", self.debug_detections)
+        self.debug_tracking = self.try_get_param(
+            "~debug_tracking", self.debug_tracking)
 
         # Feature extraction settings.
         self.feature_extraction = self.try_get_param(
