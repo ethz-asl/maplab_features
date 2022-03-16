@@ -7,16 +7,13 @@ flatness_range:      1.0
 flatness_intensity:  5.0
 
 # Input / Output
-operation_mode: "image" # or projection
-in_range_image_topic: /img_node/range_image
-in_intensity_image_topic: /img_node/intensity_image
+operation_mode: "projection" # or image
+in_pointcloud_topic: /os_cloud_node/points
 out_image_topic:     /os_cloud_node/images
 
 # LiDAR Settings
-# fov_up:              50.5  # OS-1: 17.5
 fov_up:              17.5  # OS-1: 17.5
-# fov_down:            47.5  # OS-1: -15.5
-fov_down:            -15.5  # OS-1: -15.5
+fov_down:            47.5  # OS-1: -15.5
 projection_height:   64
 projection_width:    1024
 

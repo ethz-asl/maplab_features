@@ -16,6 +16,9 @@ class LidarImageConfig(BaseConfig):
         self.flatness_intensity = 5
 
         # Input and output.
+        self.operation_mode = 'projection'
+        self.in_range_image_topic = ''
+        self.in_intensity_image_topic = ''
         self.in_pointcloud_topic = '/os_cloud_node/points'
         self.out_image_topic = '/os_cloud_node/images'
 
@@ -39,6 +42,9 @@ class LidarImageConfig(BaseConfig):
         self.flatness_intensity = self.try_get_param("~flatness_intensity", self.flatness_intensity)
 
         # Input and output.
+        self.operation_mode = self.try_get_param("~operation_mode", self.operation_mode)
+        self.in_range_image_topic = self.try_get_param("~in_range_image_topic", self.in_range_image_topic)
+        self.in_intensity_image_topic = self.try_get_param("~in_intensity_image_topic", self.in_intensity_image_topic)
         self.in_pointcloud_topic = self.try_get_param("~in_pointcloud_topic", self.in_pointcloud_topic)
         self.out_image_topic = self.try_get_param("~out_image_topic", self.out_image_topic)
 

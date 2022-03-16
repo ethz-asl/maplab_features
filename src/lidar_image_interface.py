@@ -58,7 +58,6 @@ class LidarReceiver:
         range_img = cv2.inpaint(range_img, inpaint_mask, 5.0, cv2.INPAINT_TELEA)
         range_img = cv2.GaussianBlur(range_img, (3,3) ,cv2.BORDER_DEFAULT)
 
-
         range_grad_x = cv2.convertScaleAbs(cv2.Sobel(range_img, cv2.CV_8U, dx=1, dy=0, ksize=3))
         range_grad_y = cv2.convertScaleAbs(cv2.Sobel(range_img, cv2.CV_8U, dx=0, dy=1, ksize=3))
 
