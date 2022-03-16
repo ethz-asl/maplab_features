@@ -7,7 +7,7 @@ flatness_range:      1.0
 flatness_intensity:  5.0
 
 # Input / Output
-operation_mode: "image" # or projection
+operation_mode: 'image' # or projection
 in_range_image_topic: /img_node/range_image
 in_intensity_image_topic: /img_node/intensity_image
 out_image_topic:     /os_cloud_node/images

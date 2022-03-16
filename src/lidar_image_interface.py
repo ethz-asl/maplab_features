@@ -8,6 +8,7 @@ from sensor_msgs.msg import Image, PointCloud2, PointField
 from maplab_msgs.msg import Features
 from point_cloud_utils import *
 import matplotlib.pyplot as plt
+import message_filters
 
 from config import LidarImageConfig
 from point_cloud_utils import PointCloudUtils
@@ -28,18 +29,34 @@ class LidarReceiver:
         self.merge_mertens = cv2.createMergeMertens()
 
         # Subscriber and publisher.
-        self.pc_sub = rospy.Subscriber(self.config.in_pointcloud_topic, PointCloud2, self.pointcloud_callback)
+        if self.config.operation_mode == 'projection':
+            self.pc_sub = rospy.Subscriber(self.config.in_pointcloud_topic, PointCloud2, self.pointcloud_callback)
+            rospy.loginfo('[LidarReceiver] Subscribed to {sub}.'.format(sub=self.config.in_pointcloud_topic))
+        elif self.config.operation_mode == 'image':
+            range_img_sub = message_filters.Subscriber(self.config.in_range_image_topic, Image)
+            intensity_img_sub = message_filters.Subscriber(self.config.in_intensity_image_topic, Image)
+            self.ts = message_filters.TimeSynchronizer([range_img_sub, intensity_img_sub], 10)
+            self.ts.registerCallback(self.image_callback)
+            rospy.loginfo('[LidarReceiver] Subscribed to {range_sub} and {intensity_sub}.'.format(range_sub=self.config.in_range_image_topic, intensity_sub=self.config.in_range_image_topic))
+
         self.feature_image_pub = rospy.Publisher(
                 self.config.out_image_topic, Image, queue_size=20)
         self.bridge = CvBridge()
-        rospy.loginfo('[LidarReceiver] Subscribed to {sub}.'.format(sub=self.config.in_pointcloud_topic))
         rospy.loginfo('[LidarReceiver] Publishing on {pub}.'.format(pub=self.config.out_image_topic))
 
     def pointcloud_callback(self, msg):
         cloud = self.utils.convert_msg_to_array(msg)
 
-        range_img, intensity_img, inpaint_mask = self.utils.project_cloud_to_2d(cloud, self.config.fov_up, self.config.fov_down, self.config.projection_height, self.config.projection_width)
-        feature_img = self.process_images(range_img, intensity_img, inpaint_mask)
+        range_img, intensity_img = self.utils.project_cloud_to_2d(cloud, self.config.fov_up, self.config.fov_down, self.config.projection_height, self.config.projection_width)
+        self.merge_and_publish_feature_image(range_img, intensity_img)
+
+    def image_callback(self, range_msg, intensity_msg):
+        range_img = self.bridge.imgmsg_to_cv2(range_msg)
+        intensity_img = self.bridge.imgmsg_to_cv2(intensity_msg)
+        self.merge_and_publish_feature_image(range_img, intensity_img)
+
+    def merge_and_publish_feature_image(self, range_img, intensity_img):
+        feature_img = self.process_images(range_img, intensity_img)
         if self.config.visualize:
             self.visualize_projection(range_img, intensity_img)
             self.visualize_feature_image(feature_img)
@@ -47,14 +64,14 @@ class LidarReceiver:
         img_msg = self.bridge.cv2_to_imgmsg(feature_img, "mono8")
         self.feature_image_pub.publish(img_msg)
 
-
-    def process_images(self, range_img, intensity_img, inpaint_mask):
+    def process_images(self, range_img, intensity_img):
         # Perform a histogram equalization of the intensity channel
         intensity_img = self.intensity_clahe.apply(intensity_img)
 
         # Filter horizontal lines.
         intensity_img = cv2.filter2D(intensity_img, -1, self.horizontal_filter_kernel)
 
+        inpaint_mask = self.utils.compute_inpaint_mask(range_img)
         range_img = cv2.inpaint(range_img, inpaint_mask, 5.0, cv2.INPAINT_TELEA)
         range_img = cv2.GaussianBlur(range_img, (3,3) ,cv2.BORDER_DEFAULT)
 
