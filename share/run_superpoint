@@ -1,4 +1,8 @@
 #!/usr/bin/env zsh
 
 features_dir=/tmp/maplab_features
-docker run -it --mount type=bind,source="${features_dir}",target="${features_dir}" maplab.features.worker "python3" "superpoint_interface.py"
+docker run -it \
+  --mount type=bind,source="${features_dir}",target="${features_dir}" \
+  maplab.features.worker "python3" "superpoint_interface.py"
+
+ exit 0

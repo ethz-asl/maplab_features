@@ -192,6 +192,8 @@ class ImageReceiver:
         except CvBridgeError as e:
             print(e)
 
+        print('RECEIVED AN IMAGE')
+
         self.count_received_images += 1
 
         if self.config.resize_input_image != -1:
