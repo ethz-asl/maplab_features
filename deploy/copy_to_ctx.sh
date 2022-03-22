@@ -4,7 +4,7 @@
 script_source=$(readlink -f "$0")
 script_dir=$(dirname "$script_source")
 docker_ctx=${script_dir}/docker_ctx
-ws=${docker_ctx}/ws/src/maplab/
+ws=${docker_ctx}/ws/src/maplab_features/
 ws_src=${ws}/..
 project_dir=${script_dir}/..
 
