@@ -7,3 +7,5 @@ docker run -it \
  --mount type=bind,source="${features_dir}",target="${features_dir}" \
  maplab.features.interface \
  "roslaunch" "maplab_features" "super.launch"
+
+ exit 0
