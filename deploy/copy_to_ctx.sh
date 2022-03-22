@@ -23,6 +23,7 @@ rsync -a \
 # Copy the installation script to the context.
 cp "${script_dir}/install_base.sh" "${docker_ctx}"
 cp "${script_dir}/install_ros.sh" "${docker_ctx}"
+cp "${script_dir}/install_catkin.sh" "${docker_ctx}"
 cp "${script_dir}/install_packages.sh" "${docker_ctx}"
 cp "${script_dir}/set_env.sh" "${docker_ctx}"
 cp "${script_dir}/compile.sh" "${docker_ctx}"

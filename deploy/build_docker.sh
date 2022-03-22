@@ -13,7 +13,8 @@ mkdir -p "${docker_ctx}"
 echo "Finished preparing context. Building images now"
 
 # Build the docker image.
-docker build -t "fgsp.monitor_and_client" -f "${script_dir}/Dockerfile.fgsp" "${docker_ctx}"
+docker build -t "maplab.features.interface" -f "${script_dir}/Dockerfile.interface" "${docker_ctx}"
+docker build -t "maplab.features.superpoint" -f "${script_dir}/Dockerfile.superpoint" "${docker_ctx}"
 
 # Clean up.
 echo "Finished building the images. Cleaning up."
