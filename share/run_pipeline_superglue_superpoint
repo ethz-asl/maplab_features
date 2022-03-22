@@ -1,0 +1,9 @@
+#!/usr/bin/env zsh
+
+features_dir=/tmp/maplab_features
+mkdir -p "${features_dir}"
+
+package_dir=$(catkin locate maplab_features)
+${package_dir}/share/run_interface 
+# ${package_dir}/share/run_superpoint &
+# ${package_dir}/share/run_superglue &

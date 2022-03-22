@@ -4,12 +4,6 @@ FROM nvidia/cuda:10.1-runtime-ubuntu18.04
 COPY install_base.sh ./install_base.sh
 RUN sh ./install_base.sh && rm ./install_base.sh
 
-# Install the ROS environment.
-ENV TZ=Europe/Zurich
-RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
-COPY install_ros.sh ./install_ros.sh
-RUN sh ./install_ros.sh && rm ./install_ros.sh
-
 # Install the custom packages for which we will switch to the home directory.
 WORKDIR /usr/home
 COPY install_packages.sh ./install_packages.sh
@@ -17,18 +11,5 @@ RUN sh ./install_packages.sh && rm ./install_packages.sh
 
 # Configure the catkin environment.
 COPY ./ws ./ws
-WORKDIR /usr/home/ws
-RUN catkin init --workspace .
-RUN catkin config --merge-devel
-
-# Clone some external libraries.
-WORKDIR /usr/home/ws/src
-COPY install_catkin.sh ./install_catkin.sh
-RUN sh ./install_catkin.sh && rm ./install_catkin.sh
-
-# Build the project.
+WORKDIR /usr/home/ws/src/maplab_features/src
 SHELL ["/bin/bash", "-c"]
-COPY compile.sh ../
-RUN ../compile.sh
-COPY set_env.sh ../
-ENTRYPOINT ["../set_env.sh"]
