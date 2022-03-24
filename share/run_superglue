@@ -1,8 +1,10 @@
 #!/usr/bin/env zsh
 
 features_dir=/tmp/maplab_features
+mkdir -p "${features_dir}"
+
 docker run -it \
- --mount type=bind,source="${features_dir}",target="${features_dir}" \
- maplab.features.worker "python3" "superglue_interface.py"
+  --mount type=bind,source="${features_dir}",target="${features_dir}" \
+  maplab.features.worker "python3" "superglue_interface.py"
 
  exit 0
