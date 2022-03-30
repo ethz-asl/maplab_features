@@ -53,7 +53,6 @@ class PointCloudUtils:
 
         proj_range = np.full((height, width), -1, dtype=np.float32)
         proj_intensity = np.full((height, width), -1, dtype=np.float32)
-        inpaint_mask = np.full((height, width), 0, dtype=np.uint8)
 
         # Range and intensity scaling.
         bad_points_mask = range < self.config.close_point
@@ -67,6 +66,10 @@ class PointCloudUtils:
 
         proj_range[proj_y, proj_x] = range
         proj_intensity[proj_y, proj_x] = np.clip(intensity, 0, 255)
-        inpaint_mask[proj_range <= 0] = 255
 
-        return proj_range, proj_intensity.astype(np.uint8), inpaint_mask
+        return proj_range, proj_intensity.astype(np.uint8)
+
+    def compute_inpaint_mask(self, range_img):
+        inpaint_mask = np.full(range_img.shape, 0, dtype=np.uint8)
+        inpaint_mask[range_img <= 0] = 255
+        return inpaint_mask
