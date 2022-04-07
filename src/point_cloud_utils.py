@@ -1,6 +1,7 @@
 #!/usr/bin/env python2
 
 import numpy as np
+import rospy
 import sensor_msgs.point_cloud2 as pc2
 
 class PointCloudUtils:
@@ -23,7 +24,7 @@ class PointCloudUtils:
         return np.array(points_list)
 
     # Based on https://github.com/PRBonn/OverlapNet/blob/master/src/utils/utils.py
-    def project_cloud_to_2d(self, cloud, fov_up=3.0, fov_down=-25.0, height=64, width=900):
+    def project_cloud_to_2d(self, cloud, fov_up=0.0, fov_down=0.0, height=64, width=1024):
         fov_up = fov_up / 180.0 * np.pi  # field of view up in radians
         fov_down = fov_down / 180.0 * np.pi  # field of view down in radians
         fov = abs(fov_down) + abs(fov_up)  # get field of view total in radians
@@ -32,10 +33,16 @@ class PointCloudUtils:
         y_points = cloud[:, 1]
         z_points = cloud[:, 2]
         intensity = cloud[:, 3]
-        range = np.sqrt(x_points ** 2 + y_points ** 2, z_points ** 2) + 1e-6
+        range_xyz = np.sqrt(x_points ** 2 + y_points ** 2 + z_points ** 2)
 
+        mask = range_xyz > self.config.close_point
+        x_points = x_points[mask]
+        y_points = y_points[mask]
+        z_points = z_points[mask]
+        intensity = intensity[mask]
+        range_xyz = range_xyz[mask]
 
-        pitch = np.arcsin(np.clip(z_points/range, -1, 1))
+        pitch = np.arcsin(np.clip(z_points / range_xyz, -1, 1))
         yaw = np.arctan2(y_points, -x_points)
 
         # Get projections in image coords.
@@ -47,34 +54,32 @@ class PointCloudUtils:
         proj_y *= height  # in [0.0, H]
 
         # Round and clamp for use as index.
-        proj_x = np.floor(proj_x)
+        proj_x = np.round(proj_x)
         proj_x = np.minimum(width - 1, proj_x)
         proj_x = np.maximum(0, proj_x).astype(np.int32)  # in [0,W-1]
 
-        proj_y = np.floor(proj_y)
+        proj_y = np.round(proj_y)
         proj_y = np.minimum(height - 1, proj_y)
         proj_y = np.maximum(0, proj_y).astype(np.int32)  # in [0,H-1]
 
         proj_range = np.full((height, width), -1, dtype=np.float32)
         proj_intensity = np.full((height, width), -1, dtype=np.float32)
-        inpaint_mask = np.full((height, width), 0, dtype=np.uint8)
 
         # Range and intensity scaling.
-        bad_points_mask = range < self.config.close_point
-        good_points_mask = range > self.config.close_point
-        range[bad_points_mask] = 0.0
-        range[good_points_mask] = self.range_log_base * np.log(
-            (range[good_points_mask] - self.range_lower_end) *
-            self.config.flatness_range)
+        range_xyz = self.range_log_base * np.log(
+            (range_xyz - self.range_lower_end) * self.config.flatness_range)
 
         good_points_mask = intensity > self.config.min_intensity
-        intensity[intensity < self.config.close_point] = 0.0
+        intensity[~good_points_mask] = 0.0
         intensity[good_points_mask] = self.intensity_log_base * np.log(
             (intensity[good_points_mask] - self.intensity_lower_end) *
             self.config.flatness_intensity)
 
-        proj_range[proj_y, proj_x] = range
+        proj_range[proj_y, proj_x] = range_xyz
         proj_intensity[proj_y, proj_x] = np.clip(intensity, 0, 255)
+
+        # Mask of pixels that need inpainting
+        inpaint_mask = np.full((height, width), 0, dtype=np.uint8)
         inpaint_mask[proj_range <= 0] = 255
 
         return proj_range, proj_intensity.astype(np.uint8), inpaint_mask

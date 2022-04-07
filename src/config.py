@@ -20,8 +20,8 @@ class LidarImageConfig(BaseConfig):
         self.out_image_topic = '/os_cloud_node/images'
 
         # LiDAR settings.
-        self.fov_up = 50.5
-        self.fov_down = 47.5
+        self.fov_up = 46.0
+        self.fov_down = 45.0
         self.projection_height = 64
         self.projection_width = 1024
 
@@ -46,7 +46,7 @@ class LidarImageConfig(BaseConfig):
         self.fov_up = self.try_get_param("~fov_up", self.fov_up)
         self.fov_down = self.try_get_param("~fov_down", self.fov_down)
         self.projection_height = self.try_get_param("~projection_height", self.projection_height)
-        self.projection_width = self.try_get_param("~projection_widt", self.projection_width)
+        self.projection_width = self.try_get_param("~projection_width", self.projection_width)
 
         # General settings.
         self.visualize = self.try_get_param("~visualize", self.visualize)
