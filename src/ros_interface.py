@@ -198,6 +198,8 @@ class ImageReceiver:
             self.scale = self.config.resize_input_image / float(max(h, w))
             nh, nw = int(h * self.scale), int(w * self.scale)
             cv_image = cv2.resize(cv_image, (nw, nh))
+        else:
+            self.scale = 1
 
         if cv_image.ndim == 3 and cv_image.shape[2] == 3:
             frame_gray = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
