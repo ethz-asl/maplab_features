@@ -39,8 +39,7 @@ class LidarReceiver:
         cloud = self.utils.convert_msg_to_array(msg)
 
         range_img, intensity_img, inpaint_mask = self.utils.project_cloud_to_2d(
-            cloud, self.config.fov_up, self.config.fov_down,
-            self.config.projection_height, self.config.projection_width)
+            cloud, self.config.projection_height, self.config.projection_width)
         feature_img = self.process_images(range_img, intensity_img, inpaint_mask)
         if self.config.visualize:
             self.visualize_projection(range_img, intensity_img)

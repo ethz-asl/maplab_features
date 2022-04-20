@@ -3,10 +3,13 @@
 import numpy as np
 import rospy
 import sensor_msgs.point_cloud2 as pc2
+import cv2
 
 class PointCloudUtils:
     def __init__(self, config):
         self.config = config
+        self.lidar_calibration = np.genfromtxt(
+            self.config.lidar_calibration, delimiter=',').astype(np.int32)
 
         self.range_log_base = 255.0 / np.log(1.0 -
             self.config.close_point * self.config.flatness_range +
@@ -24,43 +27,10 @@ class PointCloudUtils:
         return np.array(points_list)
 
     # Based on https://github.com/PRBonn/OverlapNet/blob/master/src/utils/utils.py
-    def project_cloud_to_2d(self, cloud, fov_up=0.0, fov_down=0.0, height=64, width=1024):
-        fov_up = fov_up / 180.0 * np.pi  # field of view up in radians
-        fov_down = fov_down / 180.0 * np.pi  # field of view down in radians
-        fov = abs(fov_down) + abs(fov_up)  # get field of view total in radians
-
-        x_points = cloud[:, 0]
-        y_points = cloud[:, 1]
-        z_points = cloud[:, 2]
+    def project_cloud_to_2d(self, cloud, height=64, width=1024):
         intensity = cloud[:, 3]
-        range_xyz = np.sqrt(x_points ** 2 + y_points ** 2 + z_points ** 2)
-
+        range_xyz = np.linalg.norm(cloud[:, 0:3], axis=1)
         mask = range_xyz > self.config.close_point
-        x_points = x_points[mask]
-        y_points = y_points[mask]
-        z_points = z_points[mask]
-        intensity = intensity[mask]
-        range_xyz = range_xyz[mask]
-
-        pitch = np.arcsin(np.clip(z_points / range_xyz, -1, 1))
-        yaw = np.arctan2(y_points, -x_points)
-
-        # Get projections in image coords.
-        proj_x = 0.5 * (yaw / np.pi + 1.0)  # in [0.0, 1.0]
-        proj_y = 1.0 - (pitch + abs(fov_down)) / fov  # in [0.0, 1.0]
-
-        # Scale to image size using angular resolution.
-        proj_x *= width  # in [0.0, W]
-        proj_y *= height  # in [0.0, H]
-
-        # Round and clamp for use as index.
-        proj_x = np.round(proj_x)
-        proj_x = np.minimum(width - 1, proj_x)
-        proj_x = np.maximum(0, proj_x).astype(np.int32)  # in [0,W-1]
-
-        proj_y = np.round(proj_y)
-        proj_y = np.minimum(height - 1, proj_y)
-        proj_y = np.maximum(0, proj_y).astype(np.int32)  # in [0,H-1]
 
         proj_range = np.full((height, width), -1, dtype=np.float32)
         proj_intensity = np.full((height, width), -1, dtype=np.float32)
@@ -75,8 +45,21 @@ class PointCloudUtils:
             (intensity[good_points_mask] - self.intensity_lower_end) *
             self.config.flatness_intensity)
 
-        proj_range[proj_y, proj_x] = range_xyz
-        proj_intensity[proj_y, proj_x] = np.clip(intensity, 0, 255)
+        counter = np.zeros((height, width))
+
+        for i in range(height):
+            for j in range(width):
+                index = i * width + j
+                if mask[index]:
+                    x = self.lidar_calibration[index]
+                    if x != -1:
+                        proj_range[i, x] = range_xyz[index]
+                        proj_intensity[i, x] = np.clip(intensity[index], 0, 255)
+
+                        counter[i, x] += 1
+
+        print(np.sum(counter > 1))
+        cv2.imshow('dups', (counter > 1).astype(np.float32))
 
         # Mask of pixels that need inpainting
         inpaint_mask = np.full((height, width), 0, dtype=np.uint8)
