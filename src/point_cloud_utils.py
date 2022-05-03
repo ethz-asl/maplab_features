@@ -45,7 +45,7 @@ class PointCloudUtils:
             (intensity[good_points_mask] - self.intensity_lower_end) *
             self.config.flatness_intensity)
 
-        counter = np.zeros((height, width))
+        #counter = np.zeros((height, width))
 
         for i in range(height):
             for j in range(width):
@@ -56,10 +56,10 @@ class PointCloudUtils:
                         proj_range[i, x] = range_xyz[index]
                         proj_intensity[i, x] = np.clip(intensity[index], 0, 255)
 
-                        counter[i, x] += 1
+                        #counter[i, x] += 1
 
-        print(np.sum(counter > 1))
-        cv2.imshow('dups', (counter > 1).astype(np.float32))
+        #print(np.sum(counter > 1))
+        #cv2.imshow('dups', (counter > 1).astype(np.float32))
 
         # Mask of pixels that need inpainting
         inpaint_mask = np.full((height, width), 0, dtype=np.uint8)
