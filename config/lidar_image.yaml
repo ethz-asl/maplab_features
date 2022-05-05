@@ -15,5 +15,5 @@ projection_height:   64
 projection_width:    2048
 
 # General Settings
-visualize:           True
-resize_output:       True
+visualize:           False
+resize_output:       False

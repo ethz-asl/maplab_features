@@ -10,7 +10,7 @@ output_topic:           '/maplab_features0,
                          /maplab_features3,
                          /maplab_features4'
 
-resize_image:           640
+resize_input_image:     640
 debug_detections:       False
 debug_tracking:         False
 
