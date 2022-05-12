@@ -23,7 +23,7 @@ class ImageReceiver:
 
         self.superpoint = SuperPoint({
             'nms_radius': 4,
-            'keypoint_threshold': 0.005,
+            'keypoint_threshold': 0.01,
             'max_keypoints': 1024
         }).eval().to(self.device)
 

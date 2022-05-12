@@ -25,7 +25,7 @@ class ImageReceiver:
         self.superglue = SuperGlue({
             'weights': 'indoor',
             'sinkhorn_iterations': 100,
-            'match_threshold': 0.2,
+            'match_threshold': 0.3,
         }).eval().to(self.device)
 
         # Pipe for transferring tracking
