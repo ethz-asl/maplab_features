@@ -1,0 +1,13 @@
+<launch>
+        <node pkg="maplab_features"
+           type="run_interface" name="run_interface"
+           output="screen"/>
+
+        <node pkg="maplab_features"
+           type="run_superpoint" name="run_superpoint"
+           output="screen"/>
+
+        <node pkg="maplab_features"
+           type="run_superglue" name="run_superglue"
+           output="screen"/>
+</launch>

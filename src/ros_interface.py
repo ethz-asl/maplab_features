@@ -4,6 +4,7 @@ from __future__ import print_function
 import cv2
 import numpy as np
 import threading
+import os
 
 import rospy
 import rosbag
@@ -234,6 +235,9 @@ class ImageReceiver:
             self.publish_features(image_msg.header.stamp)
 
 if __name__ == '__main__':
+    if not os.path.exists('/tmp/maplab_features'):
+        os.makedirs('/tmp/maplab_features')
+
     rospy.init_node('maplab_features', anonymous=True)
 
     config = MainConfig()
@@ -242,16 +246,16 @@ if __name__ == '__main__':
     # Initialize pipes for external transfer
     if config.feature_extraction == 'external':
         config.fifo_features_out = open_fifo(
-            '/tmp/maplab_features_images', 'wb')
+            '/tmp/maplab_features/maplab_features_images', 'wb')
         config.fifo_features_in = open_fifo(
-            '/tmp/maplab_features_descriptors', 'rb')
+            '/tmp/maplab_features/maplab_features_descriptors', 'rb')
     config.lock_features = threading.Lock()
 
     if config.feature_tracking == 'superglue':
         config.fifo_tracking_out = open_fifo(
-            '/tmp/maplab_tracking_images', 'wb')
+            '/tmp/maplab_features/maplab_tracking_images', 'wb')
         config.fifo_tracking_in = open_fifo(
-            '/tmp/maplab_tracking_matches', 'rb')
+            '/tmp/maplab_features/maplab_tracking_matches', 'rb')
     config.lock_tracking = threading.Lock()
 
     receivers = []

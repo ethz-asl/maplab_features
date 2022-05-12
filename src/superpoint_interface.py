@@ -29,9 +29,9 @@ class ImageReceiver:
 
         # Pipe for transferring detection
         self.fifo_images = open_fifo(
-            '/tmp/maplab_features_images', 'rb')
+            '/tmp/maplab_features/maplab_features_images', 'rb')
         self.fifo_descriptors = open_fifo(
-            '/tmp/maplab_features_descriptors', 'wb')
+            '/tmp/maplab_features/maplab_features_descriptors', 'wb')
 
     def to_torch(self, arr):
         return torch.from_numpy(arr).float()[None].to(self.device)
