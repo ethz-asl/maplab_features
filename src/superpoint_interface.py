@@ -33,9 +33,6 @@ class ImageReceiver:
         self.fifo_descriptors = open_fifo(
             '/tmp/maplab_features_descriptors', 'wb')
 
-    def to_torch(self, arr):
-        return torch.from_numpy(arr).float()[None].to(self.device)
-
     def callback(self):
         # Receive image on pipe and decode
         cv_image = cv2.imdecode(read_np(self.fifo_images, np.uint8),
