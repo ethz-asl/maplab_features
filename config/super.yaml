@@ -21,5 +21,5 @@ mask_redetections_thr_px:      4
 
 # Feature tracking settings.
 feature_tracking:    'superglue'
-num_tracked_points:  400
+num_tracked_points:  1024
 pca_descriptors:     'superpoint_pca'

@@ -5,7 +5,7 @@ import cv2
 import numpy as np
 import torch
 
-from utils_py2 import open_fifo, read_np, send_np
+from utils_py3 import open_fifo, read_np, send_np
 
 module_path = os.path.abspath(os.path.join('trackers/superglue'))
 if module_path not in sys.path:
@@ -23,7 +23,7 @@ class ImageReceiver:
 
         self.superpoint = SuperPoint({
             'nms_radius': 4,
-            'keypoint_threshold': 0.01,
+            'keypoint_threshold': 0.005,
             'max_keypoints': 1024
         }).eval().to(self.device)
 
