@@ -26,7 +26,7 @@ class ImageReceiver:
         # Image subscriber
         self.image_sub = rospy.Subscriber(
             self.config.input_topic[self.index], Image,
-            self.image_callback, queue_size=4000)
+            self.image_callback, queue_size=10000)
         self.descriptor_pub = rospy.Publisher(
             self.config.output_topic[self.index], Features,
             queue_size=100)
@@ -58,6 +58,15 @@ class ImageReceiver:
         else:
             raise ValueError('Invalid feature tracking method: {tracker}'.format(
                 tracker=self.config.feature_tracking))
+
+        # Feature compression with PCA
+        if self.config.pca_descriptors:
+            import pickle
+            pickle_path = os.path.join(
+                self.config.path_prefix, 'config',
+                self.config.pca_descriptors + '.pkl')
+            with open(pickle_path, 'rb') as pickle_file:
+                self.pca = pickle.load(pickle_file)
 
         # Data on the last processed frame
         self.prev_xy = []
@@ -148,9 +157,14 @@ class ImageReceiver:
 
     def publish_features(self, stamp):
         num_keypoints = int(self.prev_xy.shape[0])
+        descriptors = self.prev_descriptors
+
+        # If available PCA descriptor before exporting
+        if not self.pca is None:
+            descriptors = self.pca.transform(descriptors)
 
         # Flatten descriptors and convert to bytes
-        descriptors = self.prev_descriptors.flatten().view(np.uint8)
+        descriptors = descriptors.flatten().view(np.uint8)
 
         # Fill in basic message data
         feature_msg = Features()

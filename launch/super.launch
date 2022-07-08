@@ -4,5 +4,6 @@
   <arg name="node_name"   default="super"/>
   <node name="$(arg node_name)" pkg="maplab_features" type="ros_interface.py" output="screen">
     <rosparam command="load" file="$(arg config_file)"/>
+    <param name="path_prefix" value="$(find maplab_features)"/>
   </node>
 </launch>

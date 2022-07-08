@@ -6,7 +6,7 @@ import numpy as np
 import torch
 import matplotlib.cm as cm
 
-from utils_py2 import open_fifo, read_np, send_np
+from utils_py3 import open_fifo, read_np, send_np
 
 module_path = os.path.abspath(os.path.join('trackers/superglue'))
 if module_path not in sys.path:

@@ -2,8 +2,7 @@
 <launch>
   <arg name="config_file" default="$(find maplab_features)/config/lidar_image.yaml"/>
   <arg name="node_name"   default="lidar_image"/>
-  <node name="$(arg node_name)" pkg="maplab_features" type="lidar_image_interface.py" output="screen" respawn="true">
+  <node name="$(arg node_name)" pkg="maplab_features" type="calibrate_lidar.py" output="screen" respawn="false">
     <rosparam command="load" file="$(arg config_file)"/>
-    <param name="lidar_calibration" value="$(find maplab_features)/config/calibrations/hilti-lidar.csv"/>
   </node>
 </launch>

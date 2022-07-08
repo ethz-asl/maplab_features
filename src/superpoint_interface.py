@@ -5,7 +5,7 @@ import cv2
 import numpy as np
 import torch
 
-from utils_py2 import open_fifo, read_np, send_np
+from utils_py3 import open_fifo, read_np, send_np
 
 module_path = os.path.abspath(os.path.join('trackers/superglue'))
 if module_path not in sys.path:
@@ -32,9 +32,6 @@ class ImageReceiver:
             '/tmp/maplab_features/maplab_features_images', 'rb')
         self.fifo_descriptors = open_fifo(
             '/tmp/maplab_features/maplab_features_descriptors', 'wb')
-
-    def to_torch(self, arr):
-        return torch.from_numpy(arr).float()[None].to(self.device)
 
     def callback(self):
         # Receive image on pipe and decode

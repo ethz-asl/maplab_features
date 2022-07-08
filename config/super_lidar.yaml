@@ -1,0 +1,16 @@
+# General settings.
+input_topic:            '/os_cloud_node/images'
+output_topic:           '/lidar_features'
+
+resize_input_image:     2048
+debug_detections:       True
+debug_tracking:         True
+
+# Feature extraction settings.
+feature_extraction:            'external'
+min_distance_to_image_border:  3
+mask_redetections_thr_px:      5
+
+# Feature tracking settings.
+feature_tracking:   'superglue'
+num_tracked_points:  600
