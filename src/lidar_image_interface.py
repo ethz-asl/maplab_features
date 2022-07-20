@@ -152,6 +152,8 @@ class LidarReceiver:
         msg.keypoint3DZ = keypoint3DZ
         msg.keypointTimeOffset = keypointTimeOffset
 
+        self.feature3D_pub.publish(msg)
+
 if __name__ == '__main__':
     rospy.init_node('lidar_image_converter', anonymous=True)
     receiver = LidarReceiver()

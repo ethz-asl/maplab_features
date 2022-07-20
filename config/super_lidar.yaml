@@ -4,8 +4,8 @@ mask_topic:             /os_cloud_node/image_mask
 output_topic:           /lidar_features_2D
 
 resize_input_image:     2048
-debug_detections:       true
-debug_tracking:         true
+debug_detections:       false
+debug_tracking:         false
 
 # Feature extraction settings.
 feature_extraction:            'external'
