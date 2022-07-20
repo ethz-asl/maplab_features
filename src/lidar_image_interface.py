@@ -26,21 +26,40 @@ class LidarReceiver:
                                                   [0.25],
                                                   [0.125]])
         self.merge_mertens = cv2.createMergeMertens()
+        self.cv_bridge = CvBridge()
 
         # Subscriber and publisher.
-        self.pc_sub = rospy.Subscriber(self.config.in_pointcloud_topic, PointCloud2, self.pointcloud_callback)
+        self.pointcloud_sub = rospy.Subscriber(
+            self.config.in_pointcloud_topic, PointCloud2,
+            self.pointcloud_callback, queue_size=4000)
         self.feature_image_pub = rospy.Publisher(
-                self.config.out_image_topic, Image, queue_size=10000)
-        self.bridge = CvBridge()
-        rospy.loginfo('[LidarReceiver] Subscribed to {sub}.'.format(sub=self.config.in_pointcloud_topic))
-        rospy.loginfo('[LidarReceiver] Publishing on {pub}.'.format(pub=self.config.out_image_topic))
+            self.config.out_image_topic, Image, queue_size=4000)
+        rospy.loginfo('[LidarReceiver] Subscribed to points {sub}.'.format(
+            sub=self.config.in_pointcloud_topic))
+        rospy.loginfo('[LidarReceiver] Publishing images on {pub}.'.format(
+            pub=self.config.out_image_topic))
+
+        self.feature2D_sub = rospy.Subscriber(
+            self.config.in_feature_topic, Features,
+            self.feature_callback, queue_size=4000)
+        self.feature3D_pub = rospy.Publisher(
+            self.config.out_feature_topic, Features, queue_size=4000)
+        rospy.loginfo('[LidarReceiver] Subscribed to 2D features {sub}.'.format(
+            sub=self.config.in_pointcloud_topic))
+        rospy.loginfo('[LidarReceiver] Publishing 3D features on {pub}.'.format(
+            pub=self.config.out_image_topic))
+
+        # Store LiDAR data between publishing the image and feature message
+        self.buffer_proj = {}
 
     def pointcloud_callback(self, msg):
-        cloud = self.utils.convert_msg_to_array(msg)
+        cloud, time_offsets = self.utils.convert_msg_to_array(msg)
 
-        range_img, intensity_img, inpaint_mask = self.utils.project_cloud_to_2d(
-            cloud, self.config.projection_height, self.config.projection_width)
+        range_img, intensity_img, inpaint_mask, proj_cloud, proj_time_offset = \
+            self.utils.project_cloud_to_2d(cloud, time_offsets,
+                self.config.projection_height, self.config.projection_width)
         feature_img = self.process_images(range_img, intensity_img, inpaint_mask)
+
         if self.config.visualize:
             self.visualize_projection(range_img, intensity_img)
             self.visualize_feature_image(feature_img)
@@ -49,17 +68,24 @@ class LidarReceiver:
             #cv2.imshow("mask", inpaint_img)
             #cv2.waitKey(1)
 
-        img_msg = self.bridge.cv2_to_imgmsg(feature_img, "mono8")
+        img_msg = self.cv_bridge.cv2_to_imgmsg(feature_img, "mono8")
+        img_msg.header.stamp = msg.header.stamp
+
         self.feature_image_pub.publish(img_msg)
 
+        # Save 3D cloud information so we can later fill in the missing fields
+        # in the corresponding Feature message that will be published later
+        self.buffer_proj[msg.header.stamp] = (proj_cloud, proj_time_offset)
 
     def process_images(self, range_img, intensity_img, inpaint_mask):
-        intensity_img = cv2.inpaint(intensity_img, inpaint_mask, 5.0, cv2.INPAINT_TELEA)
+        intensity_img = cv2.inpaint(
+            intensity_img, inpaint_mask, 5.0, cv2.INPAINT_TELEA)
         #cv2.imshow("intensity_inpaint", intensity_img)
         #cv2.waitKey(1)
 
         # Filter horizontal lines.
-        intensity_img = cv2.filter2D(intensity_img, -1, self.horizontal_filter_kernel)
+        intensity_img = cv2.filter2D(
+            intensity_img, -1, self.horizontal_filter_kernel)
         intensity_img = cv2.medianBlur(intensity_img, 3)
         #cv2.imshow("intensity_filter", intensity_img)
         #cv2.waitKey(1)
@@ -67,14 +93,14 @@ class LidarReceiver:
         range_img = cv2.inpaint(range_img, inpaint_mask, 5.0, cv2.INPAINT_TELEA)
         range_img = cv2.GaussianBlur(range_img, (3,3) ,cv2.BORDER_DEFAULT)
 
-        range_grad_x = cv2.convertScaleAbs(cv2.Sobel(range_img, cv2.CV_8U, dx=1, dy=0, ksize=3))
-        range_grad_y = cv2.convertScaleAbs(cv2.Sobel(range_img, cv2.CV_8U, dx=0, dy=1, ksize=3))
+        range_grad_x = cv2.convertScaleAbs(
+            cv2.Sobel(range_img, cv2.CV_8U, dx=1, dy=0, ksize=3))
+        range_grad_y = cv2.convertScaleAbs(
+            cv2.Sobel(range_img, cv2.CV_8U, dx=0, dy=1, ksize=3))
         range_gradient = cv2.addWeighted(range_grad_x, 0.5, range_grad_y, 0.5, 0)
 
-        hdr_image = np.clip(self.merge_mertens.process([range_gradient, intensity_img]) * 255, 0, 255)
-
-        if self.config.resize_output:
-            hdr_image = cv2.resize(hdr_image, (8192, 256), 0, 0, interpolation=cv2.INTER_CUBIC)
+        hdr_image = np.clip(
+            self.merge_mertens.process([range_gradient, intensity_img]) * 255, 0, 255)
 
         return hdr_image.astype(np.uint8)
 
@@ -89,6 +115,32 @@ class LidarReceiver:
         feature_img = cv2.cvtColor(feature_img.astype(np.uint8), cv2.COLOR_GRAY2BGR)
         cv2.imshow("feature", feature_img)
         cv2.waitKey(1)
+
+    def feature_callback(self, msg):
+        proj_cloud, proj_time_offset = self.buffer_proj[msg.header.stamp]
+
+        keypoint3DX = []
+        keypoint3DY = []
+        keypoint3DZ = []
+        keypointTimeOffset = []
+        for i in range(msg.numKeypointMeasurements):
+            img_x = int(round(msg.keypointMeasurementsX[i]))
+            img_y = int(round(msg.keypointMeasurementsY[i]))
+
+            xyz = proj_cloud[img_y, img_x]
+            keypoint3DX.append(xyz[0])
+            keypoint3DY.append(xyz[1])
+            keypoint3DZ.append(xyz[2])
+
+            time_offset = proj_time_offset[img_y, img_x]
+            keypointTimeOffset.append(time_offset)
+
+        msg.keypoint3DX = keypoint3DX
+        msg.keypoint3DY = keypoint3DY
+        msg.keypoint3DZ = keypoint3DZ
+        msg.keypointTimeOffset = keypointTimeOffset
+
+        del self.buffer_proj[msg.header.stamp]
 
 
 if __name__ == '__main__':

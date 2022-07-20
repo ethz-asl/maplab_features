@@ -22,18 +22,25 @@ class PointCloudUtils:
 
     def convert_msg_to_array(self, pcl_msg):
         points_list = []
+        time_offsets = []
         for data in pc2.read_points(pcl_msg, skip_nans=True):
             points_list.append([data[0], data[1], data[2], data[3]])
-        return np.array(points_list)
+            time_offsets.append(data[4])
+        points_list = np.array(points_list, dtype=np.float32)
+        time_offsets = np.array(time_offsets, dtype=np.uint32)
+
+        return points_list, time_offsets
 
     # Based on https://github.com/PRBonn/OverlapNet/blob/master/src/utils/utils.py
-    def project_cloud_to_2d(self, cloud, height=64, width=1024):
+    def project_cloud_to_2d(self, cloud, time_offsets, height=64, width=1024):
         intensity = cloud[:, 3]
         range_xyz = np.linalg.norm(cloud[:, 0:3], axis=1)
         mask = range_xyz > self.config.close_point
 
         proj_range = np.full((height, width), -1, dtype=np.float32)
-        proj_intensity = np.full((height, width), -1, dtype=np.float32)
+        proj_intensity = np.full((height, width), 0, dtype=np.uint8)
+        proj_cloud = np.full((height, width, 3), -1, dtype=np.float32)
+        proj_time_offset = np.full((height, width), 0, dtype=np.uint32)
 
         # Range and intensity scaling.
         range_xyz = self.range_log_base * np.log(
@@ -45,8 +52,6 @@ class PointCloudUtils:
             (intensity[good_points_mask] - self.intensity_lower_end) *
             self.config.flatness_intensity)
 
-        #counter = np.zeros((height, width))
-
         for i in range(height):
             for j in range(width):
                 index = i * width + j
@@ -55,14 +60,11 @@ class PointCloudUtils:
                     if x != -1:
                         proj_range[i, x] = range_xyz[index]
                         proj_intensity[i, x] = np.clip(intensity[index], 0, 255)
-
-                        #counter[i, x] += 1
-
-        #print(np.sum(counter > 1))
-        #cv2.imshow('dups', (counter > 1).astype(np.float32))
+                        proj_cloud[i, x] = cloud[index, 0:3]
+                        proj_time_offset[i, x] = time_offsets[index]
 
         # Mask of pixels that need inpainting
         inpaint_mask = np.full((height, width), 0, dtype=np.uint8)
         inpaint_mask[proj_range <= 0] = 255
 
-        return proj_range, proj_intensity.astype(np.uint8), inpaint_mask
+        return proj_range, proj_intensity, inpaint_mask, proj_cloud, proj_time_offset

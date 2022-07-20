@@ -16,8 +16,10 @@ class LidarImageConfig(BaseConfig):
         self.flatness_intensity = 5
 
         # Input and output.
-        self.in_pointcloud_topic = '/os_cloud_node/points'
-        self.out_image_topic = '/os_cloud_node/images'
+        self.in_pointcloud_topic = ''
+        self.out_image_topic = ''
+        self.in_feature_topic = ''
+        self.out_feature_topic = ''
 
         # LiDAR settings.
         self.projection_height = 64
@@ -26,20 +28,29 @@ class LidarImageConfig(BaseConfig):
 
         # General settings.
         self.visualize = False
-        self.resize_output = True
 
     def init_from_config(self):
         # Image processing.
         self.close_point = self.try_get_param("~close_point", self.close_point)
         self.far_point = self.try_get_param("~far_point", self.far_point)
-        self.min_intensity = self.try_get_param("~min_intensity", self.min_intensity)
-        self.max_intensity = self.try_get_param("~max_intensity", self.max_intensity)
-        self.flatness_range = self.try_get_param("~flatness_range", self.flatness_range)
-        self.flatness_intensity = self.try_get_param("~flatness_intensity", self.flatness_intensity)
+        self.min_intensity = self.try_get_param(
+            "~min_intensity", self.min_intensity)
+        self.max_intensity = self.try_get_param(
+            "~max_intensity", self.max_intensity)
+        self.flatness_range = self.try_get_param(
+            "~flatness_range", self.flatness_range)
+        self.flatness_intensity = self.try_get_param(
+            "~flatness_intensity", self.flatness_intensity)
 
         # Input and output.
-        self.in_pointcloud_topic = self.try_get_param("~in_pointcloud_topic", self.in_pointcloud_topic)
-        self.out_image_topic = self.try_get_param("~out_image_topic", self.out_image_topic)
+        self.in_pointcloud_topic = self.try_get_param(
+            "~in_pointcloud_topic", self.in_pointcloud_topic)
+        self.out_image_topic = self.try_get_param(
+            "~out_image_topic", self.out_image_topic)
+        self.in_feature_topic = self.try_get_param(
+            "~in_feature_topic", self.in_feature_topic)
+        self.out_feature_topic = self.try_get_param(
+            "~out_feature_topic", self.out_feature_topic)
 
         # LiDAR settings.
         self.projection_height = self.try_get_param("~projection_height", self.projection_height)
@@ -48,7 +59,6 @@ class LidarImageConfig(BaseConfig):
 
         # General settings.
         self.visualize = self.try_get_param("~visualize", self.visualize)
-        self.resize_output = self.try_get_param("~resize_output", self.resize_output)
 
 class MainConfig(BaseConfig):
     def __init__(self):

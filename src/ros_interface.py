@@ -26,7 +26,7 @@ class ImageReceiver:
         # Image subscriber
         self.image_sub = rospy.Subscriber(
             self.config.input_topic[self.index], Image,
-            self.image_callback, queue_size=10000)
+            self.image_callback, queue_size=4000)
         self.descriptor_pub = rospy.Publisher(
             self.config.output_topic[self.index], Features,
             queue_size=100)

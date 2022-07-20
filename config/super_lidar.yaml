@@ -1,6 +1,6 @@
 # General settings.
-input_topic:            '/os_cloud_node/images'
-output_topic:           '/lidar_features'
+input_topic:            '/os_cloud_node/image_raw'
+output_topic:           '/lidar_features_2D'
 
 resize_input_image:     2048
 debug_detections:       true

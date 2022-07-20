@@ -8,12 +8,13 @@ flatness_intensity:  5.0
 
 # Input / Output
 in_pointcloud_topic: /os_cloud_node/points
-out_image_topic:     /os_cloud_node/images
+out_image_topic:     /os_cloud_node/image_raw
+in_feature_topic:    /lidar_features_2D
+out_feature_topic:   /lidar_features_3D
 
 # LiDAR Settings
 projection_height:   64
 projection_width:    2048
 
 # General Settings
-visualize:           False
-resize_output:       False
+visualize:           false
