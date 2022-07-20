@@ -53,11 +53,9 @@ class LidarImageConfig(BaseConfig):
 class MainConfig(BaseConfig):
     def __init__(self):
         # General settings.
-        self.path_prefix = ''
         self.input_topic = ''
         self.output_topic = ''
         self.resize_input_image = 640
-        self.pca_descriptors = ''
         self.debug_detections = False
         self.debug_tracking = False
 
@@ -72,6 +70,8 @@ class MainConfig(BaseConfig):
         # Do not initialize new feature tracks if they are closer than this
         # threshold to an existing feature track.
         self.mask_redetections_thr_px = 7
+        self.pca_descriptors = False
+        self.pca_pickle_path = ''
 
         # SURF settings.
         self.surf_hessian_threshold = 300
@@ -92,8 +92,6 @@ class MainConfig(BaseConfig):
 
     def init_from_config(self):
         # General settings.
-        self.path_prefix = self.try_get_param(
-            "~path_prefix", self.path_prefix)
         self.input_topic = self.try_get_param(
             "~input_topic", self.input_topic)
         self.output_topic = self.try_get_param(
@@ -106,8 +104,6 @@ class MainConfig(BaseConfig):
             "~debug_detections", self.debug_detections)
         self.debug_tracking = self.try_get_param(
             "~debug_tracking", self.debug_tracking)
-        self.pca_descriptors = self.try_get_param(
-            "~pca_descriptors", self.pca_descriptors)
 
         # Feature extraction settings.
         self.feature_extraction = self.try_get_param(
@@ -120,7 +116,10 @@ class MainConfig(BaseConfig):
             "~min_distance_to_image_border", self.min_distance_to_image_border)
         self.mask_redetections_thr_px = self.try_get_param(
             "~mask_redetections_thr_px", self.mask_redetections_thr_px)
-
+        self.pca_descriptors = self.try_get_param(
+            "~pca_descriptors", self.pca_descriptors)
+        self.pca_pickle_path = self.try_get_param(
+            "~pca_pickle_path", self.pca_pickle_path)
 
         # SURF settings.
         self.surf_hessian_threshold = self.try_get_param(

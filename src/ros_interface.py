@@ -62,11 +62,12 @@ class ImageReceiver:
         # Feature compression with PCA
         if self.config.pca_descriptors:
             import pickle
-            pickle_path = os.path.join(
-                self.config.path_prefix, 'config',
-                self.config.pca_descriptors + '.pkl')
-            with open(pickle_path, 'rb') as pickle_file:
+            with open(self.config.pca_pickle_path, 'rb') as pickle_file:
                 self.pca = pickle.load(pickle_file)
+            rospy.loginfo(
+                '[ImageReceiver] Using PCA to project from ' +
+                '{:d} to {:d} feature size.'.format(
+                    self.pca.n_features_ , self.pca.n_components_))
 
         # Data on the last processed frame
         self.prev_xy = []

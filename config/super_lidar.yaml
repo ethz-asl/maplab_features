@@ -3,13 +3,14 @@ input_topic:            '/os_cloud_node/images'
 output_topic:           '/lidar_features'
 
 resize_input_image:     2048
-debug_detections:       True
-debug_tracking:         True
+debug_detections:       true
+debug_tracking:         true
 
 # Feature extraction settings.
 feature_extraction:            'external'
 min_distance_to_image_border:  3
 mask_redetections_thr_px:      5
+pca_descriptors:               true
 
 # Feature tracking settings.
 feature_tracking:   'superglue'
