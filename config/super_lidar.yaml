@@ -1,6 +1,7 @@
 # General settings.
-input_topic:            '/os_cloud_node/image_raw'
-output_topic:           '/lidar_features_2D'
+input_topic:            /os_cloud_node/image_raw
+mask_topic:             /os_cloud_node/image_mask
+output_topic:           /lidar_features_2D
 
 resize_input_image:     2048
 debug_detections:       true
@@ -9,7 +10,7 @@ debug_tracking:         true
 # Feature extraction settings.
 feature_extraction:            'external'
 min_distance_to_image_border:  3
-mask_redetections_thr_px:      5
+mask_redetections_thr_px:      3
 pca_descriptors:               true
 
 # Feature tracking settings.

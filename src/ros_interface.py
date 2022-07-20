@@ -8,8 +8,8 @@ import os
 
 import rospy
 import rosbag
-from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
+from sensor_msgs.msg import Image
 from maplab_msgs.msg import Features
 from std_msgs.msg import MultiArrayDimension
 
@@ -34,6 +34,16 @@ class ImageReceiver:
                 in_topic=self.config.input_topic[self.index]) +
             ' and publishing to {out_topic}'.format(
                 out_topic=self.config.output_topic[self.index]))
+
+        # If masks are available subscribe to that topic as well
+        if len(self.config.mask_topic) > 0:
+            self.mask_sub = rospy.Subscriber(
+                self.config.mask_topic[self.index], Image,
+                self.mask_callback, queue_size=4000)
+            self.mask_buffer = {}
+            self.mask_buffer_mutex = threading.Lock()
+        else:
+            self.mask_buffer = None
 
         # CV bridge for conversion
         self.bridge = CvBridge()
@@ -82,7 +92,7 @@ class ImageReceiver:
         self.next_track_id = 0
 
 
-    def detect_and_describe(self, cv_image):
+    def detect_and_describe(self, cv_image, mask=None):
         # Get keypoints and descriptors.
         self.xy, self.scores, self.scales, self.descriptors = \
             self.feature_extraction.detect_and_describe(cv_image)
@@ -97,6 +107,12 @@ class ImageReceiver:
                 self.xy[:, 0] < img_w - self.config.min_distance_to_image_border,
                 self.xy[:, 1] < img_h - self.config.min_distance_to_image_border)
             keep = np.logical_and(top_and_left, bot_and_right)
+
+            if mask is not None:
+                to_mask = mask[
+                    np.rint(self.xy[:, 1]).astype(np.int32),
+                    np.rint(self.xy[:, 0]).astype(np.int32)]
+                keep = np.logical_and(keep, np.logical_not(to_mask))
 
             self.xy = self.xy[keep, :2]
             self.scores = self.scores[keep]
@@ -200,6 +216,17 @@ class ImageReceiver:
         # Publish
         self.descriptor_pub.publish(feature_msg)
 
+    def mask_callback(self, mask_msg):
+        try:
+            cv_mask = self.bridge.imgmsg_to_cv2(
+                    mask_msg, desired_encoding="passthrough")
+        except CvBridgeError as e:
+            print(e)
+
+        self.mask_buffer_mutex.acquire()
+        self.mask_buffer[mask_msg.header.stamp] = cv_mask
+        self.mask_buffer_mutex.release()
+
     def image_callback(self, image_msg):
         try:
             cv_image = self.bridge.imgmsg_to_cv2(
@@ -224,8 +251,27 @@ class ImageReceiver:
             frame_gray = cv_image
             frame_color = cv2.cvtColor(cv_image, cv2.COLOR_GRAY2BGR)
 
+        # If we are using masks we have to wait for the corresponding mask
+        if self.mask_buffer != None:
+            counter = 0
+            while image_msg.header.stamp not in self.mask_buffer:
+                rospy.sleep(0.001)
+                counter += 1
+                if counter > 1000:
+                    rospy.logerr("[ImageReceiver] Masks should be available " +
+                        "but none has arrived for 1 second. Giving up on " +
+                        "image at " + str(image_msg.header.stamp))
+                    return
+
+            self.mask_buffer_mutex.acquire()
+            mask = self.mask_buffer[image_msg.header.stamp]
+            del self.mask_buffer[image_msg.header.stamp]
+            self.mask_buffer_mutex.release()
+        else:
+            mask = None
+
         # Find keypoints and extract features
-        self.detect_and_describe(frame_color)
+        self.detect_and_describe(frame_color, mask)
 
         if len(self.prev_xy) > 0 and len(self.prev_frame) > 0:
             self.prev_xy, self.prev_scores, self.prev_scales, \

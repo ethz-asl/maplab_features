@@ -1,13 +1,12 @@
 #!/usr/bin/env python2
-import numpy as np
-
 import cv2
-from cv_bridge import CvBridge
+import numpy as np
+import threading
+
 import rospy
+from cv_bridge import CvBridge
 from sensor_msgs.msg import Image, PointCloud2, PointField
 from maplab_msgs.msg import Features
-from point_cloud_utils import *
-import matplotlib.pyplot as plt
 
 from config import LidarImageConfig
 from point_cloud_utils import PointCloudUtils
@@ -34,9 +33,13 @@ class LidarReceiver:
             self.pointcloud_callback, queue_size=4000)
         self.feature_image_pub = rospy.Publisher(
             self.config.out_image_topic, Image, queue_size=4000)
+        self.mask_image_pub = rospy.Publisher(
+            self.config.out_mask_topic, Image, queue_size=4000)
         rospy.loginfo('[LidarReceiver] Subscribed to points {sub}.'.format(
             sub=self.config.in_pointcloud_topic))
         rospy.loginfo('[LidarReceiver] Publishing images on {pub}.'.format(
+            pub=self.config.out_image_topic))
+        rospy.loginfo('[LidarReceiver] Publishing image masks on {pub}.'.format(
             pub=self.config.out_image_topic))
 
         self.feature2D_sub = rospy.Subscriber(
@@ -50,7 +53,8 @@ class LidarReceiver:
             pub=self.config.out_image_topic))
 
         # Store LiDAR data between publishing the image and feature message
-        self.buffer_proj = {}
+        self.proj_buffer = {}
+        self.proj_buffer_mutex = threading.Lock()
 
     def pointcloud_callback(self, msg):
         cloud, time_offsets = self.utils.convert_msg_to_array(msg)
@@ -70,12 +74,17 @@ class LidarReceiver:
 
         img_msg = self.cv_bridge.cv2_to_imgmsg(feature_img, "mono8")
         img_msg.header.stamp = msg.header.stamp
-
         self.feature_image_pub.publish(img_msg)
+
+        mask_msg = self.cv_bridge.cv2_to_imgmsg(inpaint_mask, "mono8")
+        mask_msg.header.stamp = msg.header.stamp
+        self.mask_image_pub.publish(mask_msg)
 
         # Save 3D cloud information so we can later fill in the missing fields
         # in the corresponding Feature message that will be published later
-        self.buffer_proj[msg.header.stamp] = (proj_cloud, proj_time_offset)
+        self.proj_buffer_mutex.acquire()
+        self.proj_buffer[msg.header.stamp] = (proj_cloud, proj_time_offset)
+        self.proj_buffer_mutex.release()
 
     def process_images(self, range_img, intensity_img, inpaint_mask):
         intensity_img = cv2.inpaint(
@@ -117,7 +126,10 @@ class LidarReceiver:
         cv2.waitKey(1)
 
     def feature_callback(self, msg):
-        proj_cloud, proj_time_offset = self.buffer_proj[msg.header.stamp]
+        self.proj_buffer_mutex.acquire()
+        proj_cloud, proj_time_offset = self.proj_buffer[msg.header.stamp]
+        del self.proj_buffer[msg.header.stamp]
+        self.proj_buffer_mutex.release()
 
         keypoint3DX = []
         keypoint3DY = []
@@ -139,9 +151,6 @@ class LidarReceiver:
         msg.keypoint3DY = keypoint3DY
         msg.keypoint3DZ = keypoint3DZ
         msg.keypointTimeOffset = keypointTimeOffset
-
-        del self.buffer_proj[msg.header.stamp]
-
 
 if __name__ == '__main__':
     rospy.init_node('lidar_image_converter', anonymous=True)

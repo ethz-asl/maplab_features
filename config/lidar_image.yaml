@@ -9,6 +9,7 @@ flatness_intensity:  5.0
 # Input / Output
 in_pointcloud_topic: /os_cloud_node/points
 out_image_topic:     /os_cloud_node/image_raw
+out_mask_topic:      /os_cloud_node/image_mask
 in_feature_topic:    /lidar_features_2D
 out_feature_topic:   /lidar_features_3D
 
