@@ -40,7 +40,7 @@ class LidarReceiver:
         rospy.loginfo('[LidarReceiver] Publishing images on {pub}.'.format(
             pub=self.config.out_image_topic))
         rospy.loginfo('[LidarReceiver] Publishing image masks on {pub}.'.format(
-            pub=self.config.out_image_topic))
+            pub=self.config.out_mask_topic))
 
         self.feature2D_sub = rospy.Subscriber(
             self.config.in_feature_topic, Features,
@@ -48,9 +48,9 @@ class LidarReceiver:
         self.feature3D_pub = rospy.Publisher(
             self.config.out_feature_topic, Features, queue_size=4000)
         rospy.loginfo('[LidarReceiver] Subscribed to 2D features {sub}.'.format(
-            sub=self.config.in_pointcloud_topic))
+            sub=self.config.in_feature_topic))
         rospy.loginfo('[LidarReceiver] Publishing 3D features on {pub}.'.format(
-            pub=self.config.out_image_topic))
+            pub=self.config.out_feature_topic))
 
         # Store LiDAR data between publishing the image and feature message
         self.proj_buffer = {}

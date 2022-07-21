@@ -25,9 +25,19 @@ class PointCloudUtils:
         time_offsets = []
         for data in pc2.read_points(pcl_msg, skip_nans=True):
             points_list.append([data[0], data[1], data[2], data[3]])
-            time_offsets.append(data[4])
+
+            # Make sure time offset is in bounds and no conversion issues happen
+            time_offset = data[4]
+            if (time_offset > np.iinfo(np.int32).max or
+                time_offset < np.iinfo(np.int32).min):
+                rospy.logfatal("[LidarReceiver] LiDAR point time offset " +
+                    "{:d}".format(time_offset) + "is not withing bounds of " +
+                    " int32 (which equals a delay of approx. 2 second).")
+                exit()
+            time_offsets.append(time_offset)
+
         points_list = np.array(points_list, dtype=np.float32)
-        time_offsets = np.array(time_offsets, dtype=np.uint32)
+        time_offsets = np.array(time_offsets, dtype=np.int32)
 
         return points_list, time_offsets
 

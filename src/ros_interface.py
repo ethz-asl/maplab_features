@@ -36,7 +36,7 @@ class ImageReceiver:
                 out_topic=self.config.output_topic[self.index]))
 
         # If masks are available subscribe to that topic as well
-        if len(self.config.mask_topic) > 0:
+        if self.config.mask_topic != '':
             self.mask_sub = rospy.Subscriber(
                 self.config.mask_topic[self.index], Image,
                 self.mask_callback, queue_size=4000)

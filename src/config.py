@@ -108,17 +108,15 @@ class MainConfig(BaseConfig):
         # General settings.
         self.input_topic = self.try_get_param(
             "~input_topic", self.input_topic)
-        self.mask_topic = self.try_get_param(
-            "~mask_topic", self.mask_topic)
         self.output_topic = self.try_get_param(
             "~output_topic", self.output_topic)
         self.input_topic = [t.strip() for t in self.input_topic.split(',')]
         self.output_topic = [t.strip() for t in self.output_topic.split(',')]
         assert(len(self.input_topic) == len(self.output_topic))
-        self.mask_topic = [t.strip() for t in self.mask_topic.split(',')]
-        if self.mask_topic[0] == '':
-            self.mask_topic = []
-        else:
+
+        self.mask_topic = self.try_get_param("~mask_topic", self.mask_topic)
+        if self.mask_topic != '':
+            self.mask_topic = [t.strip() for t in self.mask_topic.split(',')]
             assert(len(self.input_topic) == len(self.mask_topic))
 
         self.resize_input_image = self.try_get_param(
