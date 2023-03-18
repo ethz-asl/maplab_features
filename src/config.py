@@ -5,64 +5,6 @@ class BaseConfig(object):
         rospy.logdebug('[BaseConfig] try_get_param: {key} with default {default}'.format(key=key, default=default))
         return rospy.get_param(key) if rospy.has_param(key) else default
 
-class LidarImageConfig(BaseConfig):
-    def __init__(self):
-        # Image processing.
-        self.close_point = 1.0
-        self.far_point = 50.0
-        self.min_intensity = 2
-        self.max_intensity = 3000
-        self.flatness_range = 1
-        self.flatness_intensity = 5
-
-        # Input and output.
-        self.in_pointcloud_topic = ''
-        self.out_image_topic = ''
-        self.out_mask_topic = ''
-        self.in_feature_topic = ''
-        self.out_feature_topic = ''
-
-        # LiDAR settings.
-        self.projection_height = 64
-        self.projection_width = 1024
-        self.lidar_calibration = ''
-
-        # General settings.
-        self.visualize = False
-
-    def init_from_config(self):
-        # Image processing.
-        self.close_point = self.try_get_param("~close_point", self.close_point)
-        self.far_point = self.try_get_param("~far_point", self.far_point)
-        self.min_intensity = self.try_get_param(
-            "~min_intensity", self.min_intensity)
-        self.max_intensity = self.try_get_param(
-            "~max_intensity", self.max_intensity)
-        self.flatness_range = self.try_get_param(
-            "~flatness_range", self.flatness_range)
-        self.flatness_intensity = self.try_get_param(
-            "~flatness_intensity", self.flatness_intensity)
-
-        # Input and output.
-        self.in_pointcloud_topic = self.try_get_param(
-            "~in_pointcloud_topic", self.in_pointcloud_topic)
-        self.out_image_topic = self.try_get_param(
-            "~out_image_topic", self.out_image_topic)
-        self.out_mask_topic = self.try_get_param(
-            "~out_mask_topic", self.out_mask_topic)
-        self.in_feature_topic = self.try_get_param(
-            "~in_feature_topic", self.in_feature_topic)
-        self.out_feature_topic = self.try_get_param(
-            "~out_feature_topic", self.out_feature_topic)
-
-        # LiDAR settings.
-        self.projection_height = self.try_get_param("~projection_height", self.projection_height)
-        self.projection_width = self.try_get_param("~projection_width", self.projection_width)
-        self.lidar_calibration = self.try_get_param("~lidar_calibration", self.projection_width)
-
-        # General settings.
-        self.visualize = self.try_get_param("~visualize", self.visualize)
-
 class MainConfig(BaseConfig):
     def __init__(self):
         # General settings.
