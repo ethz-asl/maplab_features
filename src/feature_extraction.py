@@ -99,19 +99,20 @@ class FeatureExtractionCv(object):
 
         return xy, scores, scales, descriptors
 
-    def cv_keypoints_to_features(self, keypoints, descriptors):
-        n_keypoints = len(keypoints)
+    def cv_keypoints_to_features(self, cv_keypoints, cv_descriptors):
+        n_keypoints = len(cv_keypoints)
         if n_keypoints == 0:
             return np.array([]), np.array([]), np.array([]), np.array([])
-        assert n_keypoints == descriptors.shape[0]
+        assert n_keypoints == cv_descriptors.shape[0]
 
         xy = np.zeros((n_keypoints, 2))
-        scores = np.zeros((n_keypoints,))
-        scales = np.zeros((n_keypoints,))
-        descriptors = np.zeros((n_keypoints, descriptors.shape[1]))
+        scores = np.zeros((n_keypoints,), dtype=np.float32)
+        scales = np.zeros((n_keypoints,), dtype=np.float32)
+        descriptors = np.zeros(
+            (n_keypoints, cv_descriptors.shape[1]), dtype=np.float32)
         for i in range(n_keypoints):
-            xy[i] = [keypoints[i].pt[0], keypoints[i].pt[1]]
-            scores[i] = keypoints[i].response
-            scales[i] = keypoints[i].octave
-            descriptors[i] = descriptors[i,:]
+            xy[i] = [cv_keypoints[i].pt[0], cv_keypoints[i].pt[1]]
+            scores[i] = cv_keypoints[i].response
+            scales[i] = cv_keypoints[i].octave
+            descriptors[i] = cv_descriptors[i,:]
         return xy, scores, scales, descriptors

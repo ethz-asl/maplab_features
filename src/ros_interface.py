@@ -174,10 +174,10 @@ class ImageReceiver:
 
     def publish_features(self, stamp):
         num_keypoints = int(self.prev_xy.shape[0])
-        descriptors = self.prev_descriptors
+        descriptors = self.prev_descriptors.astype(np.float32)
 
         # If available PCA descriptor before exporting
-        if not self.pca is None:
+        if self.config.pca_descriptors:
             descriptors = self.pca.transform(descriptors)
 
         # Flatten descriptors and convert to bytes

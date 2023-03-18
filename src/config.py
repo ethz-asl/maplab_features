@@ -69,14 +69,14 @@ class MainConfig(BaseConfig):
         self.input_topic = ''
         self.mask_topic = ''
         self.output_topic = ''
-        self.resize_input_image = 640
+        self.resize_input_image = -1
         self.debug_detections = False
         self.debug_tracking = False
 
         # Feature extraction settings.
         self.feature_extraction = 'cv'       # cv, external
-        self.cv_feature_detector = 'sift'    # surf, sift
-        self.cv_feature_descriptor = 'freak' # freak, brief, sift, surf
+        self.cv_feature_detector = ''        # surf, sift
+        self.cv_feature_descriptor = ''      # freak, brief, sift, surf
         # Do not initialize new features closer than a minimum distnace to
         # the image border. This does not prevent existing features from being
         # tracked there though.
