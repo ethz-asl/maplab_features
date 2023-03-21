@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<launch>
+  <!-- Might be needed for preprocessing -->
+  <param name="/use_sim_time" value="true" />
+
+  <!-- Config file -->
+  <arg name="config_file"             default="$(find maplab_features)/config/lidar_projection_config.yaml"/>
+
+  <!-- Node name -->
+  <arg name="node_name"               default="lidar_image"/>
+
+  <!-- Node -->
+  <node name="$(arg node_name)" pkg="maplab_features" type="lidar_image_interface.py" output="screen" respawn="true">
+    <rosparam command="load" file="$(arg config_file)"/>
+  </node>
+</launch>
