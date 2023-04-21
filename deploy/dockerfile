@@ -1,0 +1,57 @@
+FROM nvidia/cuda:11.8.0-runtime-ubuntu20.04
+
+# General system dependencies
+RUN echo 'Etc/UTC' > /etc/timezone && \
+    ln -s /usr/share/zoneinfo/Etc/UTC /etc/localtime && \
+    apt update && apt install -q -y --no-install-recommends tzdata && \
+    rm -rf /var/lib/apt/lists/*
+RUN apt update && \
+    apt install -q -y --no-install-recommends dirmngr gnupg2 && \
+    rm -rf /var/lib/apt/lists/*
+
+# Add the ROS repository
+RUN echo "deb http://packages.ros.org/ros/ubuntu focal main" > /etc/apt/sources.list.d/ros1-latest.list
+RUN apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C1CF6E31E6BADE8868B172B4F42ED6FBAB17C654
+
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
+ENV ROS_DISTRO=noetic
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Update and install ROS and the rest of the maplab dependencies
+RUN apt update && \
+    apt install -y ros-noetic-desktop-full && \
+    rm -rf /var/lib/apt/lists/*
+RUN apt update && \
+    apt install -y build-essential python3-rosdep python3-rosinstall && \
+    rm -rf /var/lib/apt/lists/*
+RUN rosdep init && rosdep update --rosdistro $ROS_DISTRO
+RUN apt update && \
+    apt install -y autotools-dev ccache doxygen dh-autoreconf git \
+                   liblapack-dev libblas-dev libgtest-dev libreadline-dev \
+                   libssh2-1-dev pylint clang-format-12 python3-autopep8 \
+                   python3 python3-catkin-tools python3-pip python-git-doc \
+                   python3-setuptools python3-termcolor python3-wstool \
+                   libatlas3-base libv4l-dev libjpeg-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+# Python dependencies
+RUN pip3 install --upgrade pip
+RUN pip3 install requests opencv-python opencv-contrib-python
+RUN pip3 install tqdm pillow numpy matplotlib scikit-learn 
+RUN pip3 install torch torchvision
+
+# (Optional) Install ccache
+RUN apt update && apt install -y ccache && rm -rf /var/lib/apt/lists/*
+
+# Set the docker entrypoint to source the workspace
+COPY ./docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
+ENTRYPOINT ["/docker-entrypoint.sh"]
+
+# Set up the catkin workspace
+WORKDIR /maplab
+RUN catkin init
+RUN catkin config --merge-devel
+RUN catkin config --extend /opt/ros/$ROS_DISTRO
+RUN catkin config --cmake-args -DCMAKE_BUILD_TYPE=Release

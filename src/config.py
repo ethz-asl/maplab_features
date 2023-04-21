@@ -9,9 +9,8 @@ class MainConfig(BaseConfig):
     def __init__(self):
         # General settings.
         self.input_topic = ''
-        self.mask_topic = ''
         self.output_topic = ''
-        self.resize_input_image = -1
+        self.resize_input_image = 1.0
         self.debug_detections = False
         self.debug_tracking = False
 
@@ -56,13 +55,9 @@ class MainConfig(BaseConfig):
         self.output_topic = [t.strip() for t in self.output_topic.split(',')]
         assert(len(self.input_topic) == len(self.output_topic))
 
-        self.mask_topic = self.try_get_param("~mask_topic", self.mask_topic)
-        if self.mask_topic != '':
-            self.mask_topic = [t.strip() for t in self.mask_topic.split(',')]
-            assert(len(self.input_topic) == len(self.mask_topic))
-
         self.resize_input_image = self.try_get_param(
             "~resize_input_image", self.resize_input_image)
+        assert(self.resize_input_image > 0 and self.resize_input_image <= 1.0)
         self.debug_detections = self.try_get_param(
             "~debug_detections", self.debug_detections)
         self.debug_tracking = self.try_get_param(

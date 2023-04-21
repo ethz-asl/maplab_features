@@ -1,59 +1,81 @@
-import rospy
+import os
+import sys
 import cv2
 import numpy as np
+import threading
+import torch
 
-from utils_py2 import open_fifo, read_np, send_np, read_bytes
+module_path = os.path.join(os.path.dirname(__file__), 'trackers/superglue')
+if module_path not in sys.path:
+    sys.path.append(module_path)
 
-def visualize_tracking(frame, xy0, xy1, index):
+from models.superglue import SuperGlue
+
+def visualize_tracking(frame, xy0, xy1):
     vis = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
     for kp0, kp1 in zip(xy0, xy1):
         cv2.line(vis, tuple(kp0), tuple(kp1), (0, 255, 0), 1)
     for kp in xy1:
         cv2.circle(vis, (int(kp[0]), int(kp[1])), 3, (0, 255, 0), 1)
-
-    cv2.imshow("Tracking {index}".format(index=index), vis)
+    cv2.imshow("Tracking", vis)
     cv2.waitKey(3)
 
-class FeatureTrackingExternal(object):
-    def __init__(self, config, index):
+class FeatureTrackingSuperGlue(object):
+    def __init__(self, config):
         self.config = config
-        self.index = index
+        self.lock = threading.Lock()
+
+        # Network related initialization
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+        self.superglue = SuperGlue({
+            'weights': 'outdoor',
+            'sinkhorn_iterations': 100,
+            'match_threshold': 0.2,
+        }).eval().to(self.device)
+
+    def frame2tensor(self, frame, device):
+        return torch.from_numpy(frame/255.).float()[None, None].to(device)
+
+    def to_torch(self, arr):
+        return torch.from_numpy(arr).float()[None].to(self.device)
 
     def track(
-            self, frame0, frame1, xy0, xy1, scores0, scores1, scales0, scales1,
+            self, cv_image0, cv_image1, xy0, xy1, scores0, scores1, scales0, scales1,
             descriptors0, descriptors1, track_ids0):
-        # Encode images.
-        cv_success0, cv_binary0 = cv2.imencode('.png', frame0)
-        cv_success1, cv_binary1 = cv2.imencode('.png', frame1)
-        assert(cv_success0 and cv_success1)
+        # Lock thread for tracking duration
+        self.lock.acquire()
 
-        # Lock thread for transmission duration.
-        self.config.lock_tracking.acquire()
+        with torch.set_grad_enabled(False):
+            # Preprocess for pytorch
+            torch_image0 = self.frame2tensor(
+                cv_image0.astype(np.float32), self.device)
+            torch_image1 = self.frame2tensor(
+                cv_image1.astype(np.float32), self.device)
 
-        # Send images and features to external module.
-        send_np(self.config.fifo_tracking_out, cv_binary0)
-        send_np(self.config.fifo_tracking_out, cv_binary1)
+            # Get superglue output
+            data = {'image0': torch_image0,
+                    'image1': torch_image1,
+                    'keypoints0': self.to_torch(xy0),
+                    'keypoints1': self.to_torch(xy1),
+                    'scores0': self.to_torch(scores0),
+                    'scores1': self.to_torch(scores1),
+                    'descriptors0': self.to_torch(descriptors0.transpose((1, 0))),
+                    'descriptors1': self.to_torch(descriptors1.transpose((1, 0)))}
 
-        send_np(self.config.fifo_tracking_out, xy0)
-        send_np(self.config.fifo_tracking_out, scores0)
-        send_np(self.config.fifo_tracking_out, descriptors0)
+            pred = self.superglue(data)
+            matches = pred['matches0'][0].cpu().numpy().astype(np.int32)
 
-        send_np(self.config.fifo_tracking_out, xy1)
-        send_np(self.config.fifo_tracking_out, scores1)
-        send_np(self.config.fifo_tracking_out, descriptors1)
+        self.lock.release()
 
-        # Receive matches (where -1 means to match found).
-        matches = read_np(self.config.fifo_tracking_in, np.int32)
+        # Determine valid matches (-1 means no match found)
         valid = matches > -1
 
         if self.config.debug_tracking:
             visualize_tracking(
-                frame1, xy0[valid], xy1[matches[valid]], self.index)
+                frame1, xy0[valid], xy1[matches[valid]])
 
-        self.config.lock_tracking.release()
-
-        # Filter out invalid matches (i.e. points that do not have a
-        # correspondence in the previous frame)
+        # Filter out invalid matches
         xy1 = xy1[matches[valid]]
         scores1 = scores1[matches[valid]]
         scales1 = scales1[matches[valid]]

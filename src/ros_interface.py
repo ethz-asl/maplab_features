@@ -1,10 +1,11 @@
-#!/usr/bin/env python
-from __future__ import print_function
+#!/usr/bin/env python3
 
+import os
 import cv2
 import numpy as np
-import threading
-import os
+import time
+from threading import Thread
+from queue import Queue
 
 import rospy
 import rosbag
@@ -14,70 +15,33 @@ from maplab_msgs.msg import Features
 from std_msgs.msg import MultiArrayDimension
 
 from config import MainConfig
-from utils_py2 import open_fifo, read_np, send_np
-from feature_extraction import FeatureExtractionCv, FeatureExtractionExternal
-from feature_tracking import FeatureTrackingLK, FeatureTrackingExternal
+from feature_extraction import FeatureExtractionCv, FeatureExtractionSuperPoint
+from feature_tracking import FeatureTrackingLK, FeatureTrackingSuperGlue
 
-class ImageReceiver:
-    def __init__(self, config, index):
+class ImageReceiver(Thread):
+    def __init__(self, config, feature_extractor, feature_tracker, index):
+        Thread.__init__(self, args=(), daemon=True)
+
         self.config = config
         self.index = index
+        self.feature_extractor = feature_extractor
+        self.feature_tracker = feature_tracker
 
         # Image subscriber
+        self.image_queue = Queue()
         self.image_sub = rospy.Subscriber(
             self.config.input_topic[self.index], Image,
-            self.image_callback, queue_size=4000)
+            self.image_callback, queue_size=10)
         self.descriptor_pub = rospy.Publisher(
             self.config.output_topic[self.index], Features,
-            queue_size=100)
+            queue_size=10)
         rospy.loginfo('[ImageReceiver] Subscribed to {in_topic}'.format(
                 in_topic=self.config.input_topic[self.index]) +
             ' and publishing to {out_topic}'.format(
                 out_topic=self.config.output_topic[self.index]))
 
-        # If masks are available subscribe to that topic as well
-        if self.config.mask_topic != '':
-            self.mask_sub = rospy.Subscriber(
-                self.config.mask_topic[self.index], Image,
-                self.mask_callback, queue_size=4000)
-            self.mask_buffer = {}
-            self.mask_buffer_mutex = threading.Lock()
-        else:
-            self.mask_buffer = None
-
         # CV bridge for conversion
         self.bridge = CvBridge()
-
-        # Feature detection and description
-        if self.config.feature_extraction == 'cv':
-            self.feature_extraction = FeatureExtractionCv(
-                self.config, self.index)
-        elif self.config.feature_extraction == 'external':
-            self.feature_extraction = FeatureExtractionExternal(
-                self.config, self.index)
-        else:
-            raise ValueError('Invalid feature extraction type: {feature}'.format(
-                feature=self.config.feature_extraction))
-
-        if self.config.feature_tracking == 'lk':
-            self.feature_tracking = FeatureTrackingLK(
-                self.config, self.index)
-        elif self.config.feature_tracking == 'superglue':
-            self.feature_tracking = FeatureTrackingExternal(
-                self.config, self.index)
-        else:
-            raise ValueError('Invalid feature tracking method: {tracker}'.format(
-                tracker=self.config.feature_tracking))
-
-        # Feature compression with PCA
-        if self.config.pca_descriptors:
-            import pickle
-            with open(self.config.pca_pickle_path, 'rb') as pickle_file:
-                self.pca = pickle.load(pickle_file)
-            rospy.loginfo(
-                '[ImageReceiver] Using PCA to project from ' +
-                '{:d} to {:d} feature size.'.format(
-                    self.pca.n_features_ , self.pca.n_components_))
 
         # Data on the last processed frame
         self.prev_xy = []
@@ -88,14 +52,13 @@ class ImageReceiver:
         self.prev_frame = []
 
         # Initialize internal counters
-        self.count_received_images = 0
+        self.image_count = 0
         self.next_track_id = 0
 
-
-    def detect_and_describe(self, cv_image, mask=None):
+    def detect_and_describe(self, cv_image):
         # Get keypoints and descriptors.
         self.xy, self.scores, self.scales, self.descriptors = \
-            self.feature_extraction.detect_and_describe(cv_image)
+            self.feature_extractor.detect_and_describe(cv_image)
 
         if len(self.xy) > 0:
             # Do not detect next to the image border
@@ -107,12 +70,6 @@ class ImageReceiver:
                 self.xy[:, 0] < img_w - self.config.min_distance_to_image_border,
                 self.xy[:, 1] < img_h - self.config.min_distance_to_image_border)
             keep = np.logical_and(top_and_left, bot_and_right)
-
-            if mask is not None:
-                to_mask = mask[
-                    np.rint(self.xy[:, 1]).astype(np.int32),
-                    np.rint(self.xy[:, 0]).astype(np.int32)]
-                keep = np.logical_and(keep, np.logical_not(to_mask))
 
             self.xy = self.xy[keep, :2]
             self.scores = self.scores[keep]
@@ -188,9 +145,9 @@ class ImageReceiver:
         feature_msg.header.stamp = stamp
         feature_msg.numKeypointMeasurements = num_keypoints
         feature_msg.keypointMeasurementsX = (
-            self.prev_xy[:, 0] / self.scale).tolist()
+            self.prev_xy[:, 0] / self.config.resize_input_image).tolist()
         feature_msg.keypointMeasurementsY = (
-            self.prev_xy[:, 1] / self.scale).tolist()
+            self.prev_xy[:, 1] / self.config.resize_input_image).tolist()
         feature_msg.keypointMeasurementUncertainties = [0.8] * num_keypoints
         feature_msg.keypointScales = self.prev_scales.tolist()
         feature_msg.keypointScores = self.prev_scores.tolist()
@@ -216,17 +173,6 @@ class ImageReceiver:
         # Publish
         self.descriptor_pub.publish(feature_msg)
 
-    def mask_callback(self, mask_msg):
-        try:
-            cv_mask = self.bridge.imgmsg_to_cv2(
-                    mask_msg, desired_encoding="passthrough")
-        except CvBridgeError as e:
-            print(e)
-
-        self.mask_buffer_mutex.acquire()
-        self.mask_buffer[mask_msg.header.stamp] = cv_mask
-        self.mask_buffer_mutex.release()
-
     def image_callback(self, image_msg):
         try:
             cv_image = self.bridge.imgmsg_to_cv2(
@@ -234,94 +180,92 @@ class ImageReceiver:
         except CvBridgeError as e:
             print(e)
 
-        self.count_received_images += 1
-
-        if self.config.resize_input_image != -1:
+        if self.config.resize_input_image != 1.0:
             h, w = cv_image.shape[:2]
-            self.scale = self.config.resize_input_image / float(max(h, w))
-            nh, nw = int(h * self.scale), int(w * self.scale)
+            nh = int(h * self.config.resize_input_image)
+            nw = int(w * self.config.resize_input_image)
             cv_image = cv2.resize(cv_image, (nw, nh))
-        else:
-            self.scale = 1
 
-        if cv_image.ndim == 3 and cv_image.shape[2] == 3:
-            frame_gray = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
-            frame_color = cv_image
-        else:
-            frame_gray = cv_image
-            frame_color = cv2.cvtColor(cv_image, cv2.COLOR_GRAY2BGR)
+        timestamp = image_msg.header.stamp
+        self.image_queue.put((timestamp, cv_image))
 
-        # If we are using masks we have to wait for the corresponding mask
-        if self.mask_buffer != None:
-            counter = 0
-            while image_msg.header.stamp not in self.mask_buffer:
-                rospy.sleep(0.001)
-                counter += 1
-                if counter > 1000:
-                    rospy.logerr("[ImageReceiver] Masks should be available " +
-                        "but none has arrived for 1 second. Giving up on " +
-                        "image at " + str(image_msg.header.stamp))
-                    return
+    def run(self):
+        while True:
+            # Wait for next image
+            while self.image_queue.empty():
+                time.sleep(0.01)
 
-            self.mask_buffer_mutex.acquire()
-            mask = self.mask_buffer[image_msg.header.stamp]
-            del self.mask_buffer[image_msg.header.stamp]
-            self.mask_buffer_mutex.release()
-        else:
-            mask = None
+            timestamp, cv_image = self.image_queue.get()
 
-        # Find keypoints and extract features
-        self.detect_and_describe(frame_color, mask)
+            # Get both color and grayscale versions for the image
+            if cv_image.ndim == 3 and cv_image.shape[2] == 3:
+                cv_image = cv2.cvtColor(cv_image, cv2.COLOR_BGR2GRAY)
 
-        if len(self.prev_xy) > 0 and len(self.prev_frame) > 0:
-            self.prev_xy, self.prev_scores, self.prev_scales, \
-            self.prev_descriptors, self.prev_track_ids = \
-                self.feature_tracking.track(
-                    self.prev_frame, frame_gray,
-                    self.prev_xy, self.xy,
-                    self.prev_scores, self.scores,
-                    self.prev_scales, self.scales,
-                    self.prev_descriptors, self.descriptors,
-                    self.prev_track_ids)
-        self.prev_frame = frame_gray
+            # Find keypoints and extract features
+            self.detect_and_describe(cv_image)
 
-        if len(self.xy) > 0:
-            self.initialize_new_tracks(frame_gray)
+            # If we have a previous frame and features track them
+            if len(self.prev_xy) > 0 and len(self.prev_frame) > 0:
+                self.prev_xy, self.prev_scores, self.prev_scales, \
+                self.prev_descriptors, self.prev_track_ids = \
+                    self.feature_tracker.track(
+                        self.prev_frame, cv_image,
+                        self.prev_xy, self.xy,
+                        self.prev_scores, self.scores,
+                        self.prev_scales, self.scales,
+                        self.prev_descriptors, self.descriptors,
+                        self.prev_track_ids)
+            self.prev_frame = cv_image
 
-        if self.count_received_images % 10 == 0:
-            print('topic {index} recv {count}'.format(
-                index=self.index, count=self.count_received_images))
+            if len(self.xy) > 0:
+                self.initialize_new_tracks(cv_image)
 
-        if len(self.prev_xy) > 0:
-            self.publish_features(image_msg.header.stamp)
+            self.image_count += 1
+            if self.image_count % 10 == 0:
+                print('topic {index} recv {count}'.format(
+                    index=self.index, count=self.image_count))
+
+            if len(self.prev_xy) > 0:
+                self.publish_features(timestamp)
 
 if __name__ == '__main__':
-    if not os.path.exists('/tmp/maplab_features'):
-        os.makedirs('/tmp/maplab_features')
-
     rospy.init_node('maplab_features', anonymous=True)
 
     config = MainConfig()
     config.init_from_config()
 
-    # Initialize pipes for external transfer
-    if config.feature_extraction == 'external':
-        config.fifo_features_out = open_fifo(
-            '/tmp/maplab_features/maplab_features_images', 'wb')
-        config.fifo_features_in = open_fifo(
-            '/tmp/maplab_features/maplab_features_descriptors', 'rb')
-    config.lock_features = threading.Lock()
+    # Initialize shared feature extraction and tracking
+    if config.feature_extraction == 'cv':
+        feature_extractor = FeatureExtractionCv(config)
+    elif config.feature_extraction == 'superpoint':
+        feature_extractor = FeatureExtractionSuperPoint(config)
+    else:
+        raise ValueError('Invalid feature extraction type: {feature}'.format(
+            feature=config.feature_extraction))
 
-    if config.feature_tracking == 'superglue':
-        config.fifo_tracking_out = open_fifo(
-            '/tmp/maplab_features/maplab_tracking_images', 'wb')
-        config.fifo_tracking_in = open_fifo(
-            '/tmp/maplab_features/maplab_tracking_matches', 'rb')
-    config.lock_tracking = threading.Lock()
+    if config.feature_tracking == 'lk':
+        feature_tracker = FeatureTrackingLK(config)
+    elif config.feature_tracking == 'superglue':
+        feature_tracker = FeatureTrackingSuperGlue(config)
+    else:
+        raise ValueError('Invalid feature tracking method: {tracker}'.format(
+            tracker=config.feature_tracking))
 
-    receivers = []
+    # Feature compression with PCA
+    if config.pca_descriptors:
+        import pickle
+        with open(config.pca_pickle_path, 'rb') as pickle_file:
+            pca = pickle.load(pickle_file)
+        rospy.loginfo(
+            '[ImageReceiver] Using PCA to project from ' +
+            '{:d} to {:d} feature size.'.format(
+                pca.n_features_ , pca.n_components_))
+
+    receives = []
     for i in range(len(config.input_topic)):
-        receivers.append(ImageReceiver(config, i))
+        receiver = ImageReceiver(
+            config, feature_extractor, feature_tracker, i)
+        receiver.start()
 
     try:
         rospy.spin()

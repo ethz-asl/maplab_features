@@ -10,29 +10,16 @@ output_topic:           '/maplab_features0,
                          /maplab_features3,
                          /maplab_features4'
 
-resize_image:           640
-debug_detections:       False
-debug_tracking:         False
+resize_input_image:     0.75
+debug_detections:       false
+debug_tracking:         false
 
 # Feature extraction settings.
-feature_extraction:            'cv'
+feature_extraction:            'superpoint'
 min_distance_to_image_border:  30
-mask_redetections_thr_px:      7
+mask_redetections_thr_px:      4
+pca_descriptors:               true
 
 # Feature tracking settings.
-feature_tracking:        'lk'
-num_tracked_points:      600
-
-# OpenCV settings
-cv_detector_type:       'surf'
-cv_descriptor_type:     'freak'
-
-# SURF settings.
-surf_hessian_threshold: 300
-surf_n_octaves: 4
-surf_n_octaves_layers: 3
-
-# LK tracker
-lk_window_size: 15
-lk_max_step_error_px: 1.0
-lk_merge_tracks_thr_px: 3
+feature_tracking:    'superglue'
+num_tracked_points:  768
