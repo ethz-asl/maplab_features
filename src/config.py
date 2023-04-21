@@ -26,7 +26,7 @@ class MainConfig(BaseConfig):
         # threshold to an existing feature track.
         self.mask_redetections_thr_px = 7
         self.pca_descriptors = False
-        self.pca_pickle_path = ''
+        self.pca_matrix_path = ''
 
         # SURF settings.
         self.surf_hessian_threshold = 300
@@ -76,8 +76,8 @@ class MainConfig(BaseConfig):
             "~mask_redetections_thr_px", self.mask_redetections_thr_px)
         self.pca_descriptors = self.try_get_param(
             "~pca_descriptors", self.pca_descriptors)
-        self.pca_pickle_path = self.try_get_param(
-            "~pca_pickle_path", self.pca_pickle_path)
+        self.pca_matrix_path = self.try_get_param(
+            "~pca_matrix_path", self.pca_matrix_path)
 
         # SURF settings.
         self.surf_hessian_threshold = self.try_get_param(

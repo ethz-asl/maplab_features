@@ -19,11 +19,12 @@ from feature_extraction import FeatureExtractionCv, FeatureExtractionSuperPoint
 from feature_tracking import FeatureTrackingLK, FeatureTrackingSuperGlue
 
 class ImageReceiver(Thread):
-    def __init__(self, config, feature_extractor, feature_tracker, index):
+    def __init__(self, config, pca, feature_extractor, feature_tracker, index):
         Thread.__init__(self, args=(), daemon=True)
 
         self.config = config
         self.index = index
+        self.pca = pca
         self.feature_extractor = feature_extractor
         self.feature_tracker = feature_tracker
 
@@ -135,7 +136,8 @@ class ImageReceiver(Thread):
 
         # If available PCA descriptor before exporting
         if self.config.pca_descriptors:
-            descriptors = self.pca.transform(descriptors)
+            assert(not self.pca is None)
+            descriptors = np.dot(descriptors - pca[0], pca[1])
 
         # Flatten descriptors and convert to bytes
         descriptors = descriptors.flatten().view(np.uint8)
@@ -253,18 +255,30 @@ if __name__ == '__main__':
 
     # Feature compression with PCA
     if config.pca_descriptors:
-        import pickle
-        with open(config.pca_pickle_path, 'rb') as pickle_file:
-            pca = pickle.load(pickle_file)
+        import csv
+        with open(config.pca_matrix_path, 'r') as fp:
+            reader = csv.reader(fp, delimiter = ',')
+            num_features, num_components = map(int, next(reader))
+            
+            mean = next(reader)
+            mean = np.array(mean).astype(np.float32)
+            assert(mean.size == num_features)
+
+            components = [line for line in reader]
+            components = np.array(components).astype(np.float32)
+            assert(components.shape == (num_features, num_components))
+            pca = (mean, components)
+
         rospy.loginfo(
-            '[ImageReceiver] Using PCA to project from ' +
-            '{:d} to {:d} feature size.'.format(
-                pca.n_features_ , pca.n_components_))
+            '[ImageReceiver] Using PCA to project feature size from ' +
+            '{:d} to {:d}.'.format(num_features, num_components))
+    else:
+        pca = None
 
     receives = []
     for i in range(len(config.input_topic)):
         receiver = ImageReceiver(
-            config, feature_extractor, feature_tracker, i)
+            config, pca, feature_extractor, feature_tracker, i)
         receiver.start()
 
     try:

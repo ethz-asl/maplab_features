@@ -9,8 +9,7 @@ from sklearn.decomposition import PCA
 
 N_COMPONENTS = 64
 
-module_path = os.path.abspath(os.path.join(
-    'src/maplab_features/src/trackers/superglue'))
+module_path = os.path.join(os.path.dirname(__file__), 'trackers/superglue')
 if module_path not in sys.path:
     sys.path.append(module_path)
 
