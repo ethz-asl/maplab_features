@@ -1,0 +1,25 @@
+# General settings.
+input_topic:            '/alphasense/cam0/image_raw,
+                         /alphasense/cam1/image_raw,
+                         /alphasense/cam2/image_raw,
+                         /alphasense/cam3/image_raw,
+                         /alphasense/cam4/image_raw'
+output_topic:           '/maplab_features0,
+                         /maplab_features1,
+                         /maplab_features2,
+                         /maplab_features3,
+                         /maplab_features4'
+
+resize_input_image:     0.75
+debug_detections:       false
+debug_tracking:         false
+
+# Feature extraction settings.
+feature_extraction:            'superpoint'
+min_distance_to_image_border:  30
+mask_redetections_thr_px:      4
+pca_descriptors:               true
+
+# Feature tracking settings.
+feature_tracking:    'superglue'
+num_tracked_points:  768

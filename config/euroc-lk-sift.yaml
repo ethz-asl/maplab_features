@@ -1,0 +1,28 @@
+# General settings.
+input_topic:            '/cam0/image_raw,
+                         /cam1/image_raw'
+output_topic:           '/maplab_features0,
+                         /maplab_features1'
+mask_topic:             ''
+
+resize_input_image:     640
+debug_detections:       False
+debug_tracking:         False
+
+# Feature extraction settings
+feature_extraction:            'cv'
+min_distance_to_image_border:  30
+mask_redetections_thr_px:      7
+
+# Feature tracking settings
+feature_tracking:              'lk'
+num_tracked_points:            600
+
+# OpenCV settings
+cv_feature_detector:           'sift'
+cv_feature_descriptor:         'sift'
+
+# LK tracker
+lk_window_size:                15
+lk_max_step_error_px:          1.0
+lk_merge_tracks_thr_px:        3
